@@ -5,6 +5,7 @@
      DeriveTraversable,
      UndecidableInstances,
      FlexibleInstances,
+     ScopedTypeVariables,
      GADTs,
      DataKinds,
      KindSignatures #-}
@@ -18,7 +19,8 @@ import Data.Traversable
 import Data.List
 import Data.Ord
 import Text.Show.Functions
-import Vector
+-- import Vector
+import qualified V as V
 
 type CoAlgebra f a = a -> f a
 newtype Fix f = Fx (f (Fix f)) 
@@ -48,34 +50,43 @@ type Inputs  =  [Double]
 type Activation = Double -> Double
 type LossFunction = [Double] -> [Double] -> Double
 
--- data Layer' (o::Nat) (i::Nat) k where
---     Layer' :: Vector o (Vector i Double) -> Vector i Double -> Activation -> k -> Layer' o i k
---     InputLayer' :: Layer' o i k 
---     -- deriving Show
 
--- instance Functor (Layer' o i) where
---     fmap eval (Layer' weights biases activate k)      = Layer' weights biases activate (eval k) 
---     fmap eval (InputLayer' )                          = InputLayer' 
+data Layer' (o::V.Nat) (i::V.Nat) k where
+    Layer' :: V.Vector (V.Vector Double i ) o  -> V.Vector Double i  -> Activation -> k -> Layer' o i k
+    InputLayer' :: Layer' o i k 
 
--- forward' :: Fractional a => Vector o (Vector i a) -> Vector i a -> (a -> a) -> (Vector n [a] -> Vector ('Succ n) [a]) -> (Vector n [a] -> Vector ('Succ ('Succ n)) [a]) 
--- forward' weights biases activate k 
---     = (\inputs -> Vcons (map activate (zipWith (+) 
---             ((vtoList $ vmap ((sum)  . (zipWithPadding (*) (vhead inputs)) . (vtoList)) weights)) (vtoList biases))) inputs) . k
-  
--- backward' :: Fractional a => Vector o (Vector i a) -> Vector i a -> Vector i a -> Vector r a -> [[a]]
--- backward' weights biases input final_output 
---     = vtranspose $ vmap (vzipWith (+) (vmap (\xi -> learning_rate * xi * (desired_output - error)) input )) (vtranspose weights)
---         where   learning_rate = 1
---                 desired_output = 3
---                 error = (sum final_output) / (fromIntegral $ length final_output)
+instance Functor (Layer' o i) where
+    fmap eval (Layer' weights biases activate k)      = Layer' weights biases activate (eval k) 
+    fmap eval (InputLayer' )                          = InputLayer' 
+
+forward' :: Fractional a => V.Vector (V.Vector a i) o -> V.Vector a i -> (a -> a) -> ([[a]] -> [[a]]) -> ([[a]] -> [[a]]) 
+forward' weights biases activate k 
+    = (\inputs ->  ((map activate (zipWith (+) 
+            ((V.toList $ V.map 
+                ((sum)  . (zipWithPadding (*) (head inputs)) . (V.toList)) weights)) (V.toList biases))):inputs) ) . k
+
+backward' :: Fractional a => V.Vector (V.Vector a i) o -> V.Vector a i -> [a] -> [a] -> [[a]]
+backward' weights biases input final_output 
+    = let   list_weights = (V.toList $ ((V.map V.toList weights)) )
+            learning_rate = 1
+            desired_output = 3
+            error = (sum final_output) / (fromIntegral $ length final_output)
+      in    transpose $ map (zipWith (+) (map (\xi -> learning_rate * xi * (desired_output - error)) input )) (transpose list_weights)
 
 
--- alg' :: Layer' o i (Fix (Layer' j o), (Vector n Inputs -> Vector ('Succ n) Inputs) ) 
---         -> (Fix (Layer' j o), (Vector n Inputs -> Vector ('Succ ('Succ n)) Inputs))
--- alg' (Layer' weights biases activate (innerLayer, forwardPass) )   
---     =  (Fx (Layer' weights biases activate innerLayer ) , (forward' weights biases activate forwardPass) )
--- alg' (InputLayer' )                     
---     =  (Fx InputLayer', id) -- issue with id, can't return a function of Vector n Inputs -> Vector ('Succ ('Succ n)) Inputs
+alg' :: Layer' o i (Fix (Layer' o i), ([Inputs] -> [Inputs]) ) 
+        -> (Fix (Layer' o i), ([Inputs] -> [Inputs]))
+alg' (Layer' weights biases activate (innerLayer, forwardPass) )   
+    =  (Fx (Layer' weights biases activate innerLayer ) , (forward' weights biases activate forwardPass) )
+alg' (InputLayer' )                     
+    =  (Fx InputLayer', id )
+
+-- coalg' :: (Fix (Layer' o i), [Inputs]) -> Layer' o i (Fix (Layer' j o), [Inputs]) 
+-- coalg' (Fx (Layer' weights biases activate innerLayer), (x:y:ys))
+--     =  Layer' (backward' weights biases y x) biases activate (innerLayer, (x:ys))
+-- coalg' (Fx InputLayer', output)      
+--     =  InputLayer' 
+
 
 
 
