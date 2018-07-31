@@ -21,7 +21,7 @@ import Data.Ord
 import Text.Show.Functions
 -- import Vector
 import qualified V as V
-
+import V (Vector((:-)))
 type CoAlgebra f a = a -> f a
 newtype Fix f = Fx (f (Fix f)) 
 instance (Show (f (Fix f))) => Show (Fix f) where
@@ -54,7 +54,7 @@ type LossFunction = [Double] -> [Double] -> Double
 data Layer' (o::V.Nat) (i::V.Nat) k where
     Layer' :: V.Vector (V.Vector Double i ) o  -> V.Vector Double i  -> Activation -> k -> Layer' o i k
     InputLayer' :: Layer' o i k 
-
+    deriving Show
 instance Functor (Layer' o i) where
     fmap eval (Layer' weights biases activate k)      = Layer' weights biases activate (eval k) 
     fmap eval (InputLayer' )                          = InputLayer' 
@@ -65,14 +65,14 @@ forward' weights biases activate k
             ((V.toList $ V.map 
                 ((sum)  . (zipWithPadding (*) (head inputs)) . (V.toList)) weights)) (V.toList biases))):inputs) ) . k
 
-backward' :: Fractional a => V.Vector (V.Vector a i) o -> V.Vector a i -> [a] -> [a] -> [[a]]
+backward' :: (V.SingRep o, V.SingRep i, Fractional a) => V.Vector (V.Vector a i) o -> V.Vector a i -> [a] -> [a] -> V.Vector (V.Vector a i) o 
 backward' weights biases input final_output 
     = let   list_weights = (V.toList $ ((V.map V.toList weights)) )
             learning_rate = 1
             desired_output = 3
             error = (sum final_output) / (fromIntegral $ length final_output)
-      in    transpose $ map (zipWith (+) (map (\xi -> learning_rate * xi * (desired_output - error)) input )) (transpose list_weights)
-
+            new_list_weights = transpose $ map (zipWith (+) (map (\xi -> learning_rate * xi * (desired_output - error)) input )) (transpose list_weights)
+      in    V.unsafeFromList' $ map V.unsafeFromList' $ new_list_weights
 
 alg' :: Layer' o i (Fix (Layer' o i), ([Inputs] -> [Inputs]) ) 
         -> (Fix (Layer' o i), ([Inputs] -> [Inputs]))
@@ -81,11 +81,11 @@ alg' (Layer' weights biases activate (innerLayer, forwardPass) )
 alg' (InputLayer' )                     
     =  (Fx InputLayer', id )
 
--- coalg' :: (Fix (Layer' o i), [Inputs]) -> Layer' o i (Fix (Layer' j o), [Inputs]) 
--- coalg' (Fx (Layer' weights biases activate innerLayer), (x:y:ys))
---     =  Layer' (backward' weights biases y x) biases activate (innerLayer, (x:ys))
--- coalg' (Fx InputLayer', output)      
---     =  InputLayer' 
+coalg' :: (V.SingRep o, V.SingRep i) => (Fix (Layer' o i), [Inputs]) -> Layer' o i (Fix (Layer' o i), [Inputs]) 
+coalg' (Fx (Layer' weights biases activate innerLayer), (x:y:ys))
+    =  Layer' (backward' weights biases y x) biases activate (innerLayer, (x:ys))
+coalg' (Fx InputLayer', output)      
+    =  InputLayer' 
 
 
 
@@ -140,6 +140,12 @@ zipWithPadding ::  (a -> a -> a) -> [a] -> [a] -> [a]
 zipWithPadding  f (x:xs) (y:ys) = (f x y) : zipWithPadding  f xs ys
 zipWithPadding  f []     ys     = ys
 zipWithPadding  f xs     []     = xs
+
+
+example' =  (Fx ( Layer' ((2.0:-10.0:-3.0:-V.Nil):-V.Nil) (0.0:-0.0:-0.0:-V.Nil) sigmoid
+             (Fx ( Layer' ((2.0:-1.0:-3.0:-V.Nil):-V.Nil) (0.0:-0.0:-0.0:-V.Nil) sigmoid
+              (Fx   InputLayer' ) ) ) ) )
+
 
 example =  (Fx ( Layer [[-2.0,10.0,4.0]] [0, 0, 0] sigmoid
             (Fx ( Layer [[2.0,1.0,3.0]] [0, 0, 0] sigmoid
