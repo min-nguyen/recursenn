@@ -87,10 +87,6 @@ coalg' (Fx (Layer' weights biases activate innerLayer), (x:y:ys))
 coalg' (Fx InputLayer', output)      
     =  InputLayer' 
 
-
-
-
-
 data Layer k where
     Layer :: Weights -> Biases -> Activation -> k -> Layer k
     InputLayer :: Layer k 
@@ -141,14 +137,18 @@ zipWithPadding  f (x:xs) (y:ys) = (f x y) : zipWithPadding  f xs ys
 zipWithPadding  f []     ys     = ys
 zipWithPadding  f xs     []     = xs
 
+train' :: (V.SingRep o, V.SingRep i) => Fix (Layer' o i) -> LossFunction -> Inputs -> Fix (Layer' o i)
+train' neuralnet lossfunction sample = ana coalg' $ (nn,  diff_fun [sample])
+  where 
+    (nn, diff_fun) = cata alg' neuralnet
 
-example' =  (Fx ( Layer' ((2.0:-10.0:-3.0:-V.Nil):-V.Nil) (0.0:-0.0:-0.0:-V.Nil) sigmoid
-             (Fx ( Layer' ((2.0:-1.0:-3.0:-V.Nil):-V.Nil) (0.0:-0.0:-0.0:-V.Nil) sigmoid
+example' =  (Fx ( Layer' ((3.0:-10.0:-2.0:-V.Nil):-(3.0:-10.0:-2.0:-V.Nil):-(3.0:-10.0:-2.0:-V.Nil):-V.Nil) (0.0:-0.0:-0.0:-V.Nil) sigmoid
+             (Fx ( Layer' ((3.0:-1.0:-2.0:-V.Nil):-(3.0:-1.0:-2.0:-V.Nil):-(3.0:-1.0:-2.0:-V.Nil):-V.Nil) (0.0:-0.0:-0.0:-V.Nil) sigmoid
               (Fx   InputLayer' ) ) ) ) )
 
 
-example =  (Fx ( Layer [[-2.0,10.0,4.0]] [0, 0, 0] sigmoid
-            (Fx ( Layer [[2.0,1.0,3.0]] [0, 0, 0] sigmoid
+example =  (Fx ( Layer [[3.0,10.0,2.0],[3.0,10.0,2.0],[3.0,10.0,2.0]] [0, 0, 0] sigmoid
+            (Fx ( Layer [[3.0,1.0,2.0],[3.0,1.0,2.0],[3.0,1.0,2.0]] [0, 0, 0] sigmoid
              (Fx   InputLayer ) ) ) ) )
 
 main = print $ show $ train example loss [1.0, 2.0, 3.0]
