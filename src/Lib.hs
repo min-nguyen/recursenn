@@ -1,6 +1,7 @@
-module Lib
-    ( someFunc
-    ) where
+module Lib where
 
-someFunc :: IO ()
-someFunc = putStrLn "someFunc"
+
+zipWithPadding ::  (a -> a -> a) -> [a] -> [a] -> [a]
+zipWithPadding  f (x:xs) (y:ys) = (f x y) : zipWithPadding  f xs ys
+zipWithPadding  f []     ys     = ys
+zipWithPadding  f xs     []     = xs
