@@ -61,8 +61,8 @@ algy InputLayer
 coalgx :: (Fix Layer, BackPropData) -> (BackPropData -> Layer  (Fix Layer, BackPropData) )
 coalgx (Fx (Layer weights biases (activate, activate') innerLayer), 
             (BackPropData { inputStack = (output:input:xs), .. }))
-    =  (\backPropData ->  let (delta, newWeights) = (backward_d weights biases input backPropData)
-                          in Layer newWeights biases (activate, activate') (innerLayer, backPropData {outerWeights = weights}))
+    =  \backPropData -> let (delta, newWeights) = (backward_d weights biases input backPropData)
+                        in Layer newWeights biases (activate, activate') (innerLayer, backPropData {outerWeights = weights})
 coalgx (Fx InputLayer, output)
     =  \_ -> InputLayer 
 
@@ -87,16 +87,17 @@ forward weights biases activate k
 backward :: Weights -> Biases -> Activation' -> Inputs -> Outputs -> BackPropData -> (Deltas, Weights)
 backward weights biases activate' inputs outputs backPropData
     = let learningRate = 0.2 
-          deltas = compDelta activate' inputs outputs backPropData
-          newWeights = [[ w - learningRate*d*i  |  (i, w) <- zip inputs weightvec ] | d <- deltas, weightvec <- weights]                                                  
-      in (deltas, newWeights)
+          updatedDeltas = compDelta activate' inputs outputs backPropData
+          inputsDeltasWeights = map (zip3 inputs updatedDeltas) weights
+          updatedWeights = [[ w - learningRate*d*i  |  (i, w, d) <- idw_vec ] | idw_vec <- inputsDeltasWeights]                                                      
+      in (updatedDeltas, updatedWeights)
 
 backward_d :: Weights -> Biases -> Inputs  -> BackPropData -> (Deltas, Weights)
-backward_d weights biases inputs (BackPropData {outerDeltas = deltas, ..} )
+backward_d weights biases inputs (BackPropData {outerDeltas = updatedDeltas, ..} )
     = let learningRate = 0.2
-          inputsDeltasWeights = map (zip3 inputs deltas) weights
-          newWeights = [[ w - learningRate*d*i  |  (i, w, d) <- idw_vec ] | idw_vec <- inputsDeltasWeights]                                                  
-      in (deltas, newWeights)
+          inputsDeltasWeights = map (zip3 inputs updatedDeltas) weights
+          updatedWeights = [[ w - learningRate*d*i  |  (i, w, d) <- idw_vec ] | idw_vec <- inputsDeltasWeights]                                                  
+      in (updatedDeltas, updatedWeights)
 
 
 train :: Fix Layer -> LossFunction -> Inputs -> DesiredOutput -> Fix Layer 
