@@ -49,10 +49,9 @@ instance Functor (Layer) where
     fmap eval (Layer weights biases activate k)      = Layer weights biases activate (eval k) 
     fmap eval (InputLayer )                          = InputLayer 
 
-forward :: Fractional a => [[a]] -> [a] -> (a -> a) -> ([[a]] -> [[a]]) -> ([[a]] -> [[a]])
+forward :: Weights -> Biases -> Activation -> ([Inputs] -> [Inputs]) -> ([Inputs] -> [Inputs])
 forward weights biases activate k 
     = (\inputs -> (map activate ((zipWith (+) (map ((sum)  . (zipWith (*) (head inputs))) weights) biases))):inputs) . k
-
 
 alg :: Layer (Fix Layer, ([Inputs] -> [Inputs]) ) -> (Fix Layer, ([Inputs] -> [Inputs]))
 alg (Layer weights biases (activate, activate') (innerLayer, forwardPass) )   
@@ -61,31 +60,31 @@ alg (Layer weights biases (activate, activate') (innerLayer, forwardPass) )
 alg (InputLayer )                     
     =  (Fx InputLayer, id)
 
-compDelta :: Fractional a => [[a]] -> [a] -> (a -> a) -> [a] -> [a]
-compDelta outerWeights outerDeltas derivActivation inputs 
-    = elemul (mvmul (transpose outerWeights) outerDeltas) (map derivActivation inputs)
+compDelta :: Weights -> Deltas -> Activation' -> [Double] -> [Double] -> [Double] -> [Double]
+compDelta outerWeights outerDeltas derivActivation inputs outputs desiredOutput  
+    = case outerDeltas of  [] -> elemul (map (\x -> x*(x-1)) outputs) (zipWith (-) outputs desiredOutput)
+                           _  -> elemul (mvmul (transpose outerWeights) outerDeltas) (map derivActivation inputs)
 
-backward :: Fractional a => [[a]] -> [a] -> (a -> a) -> [a] -> [a] -> [a] -> [a] -> [a] -> [[a]] -> ([a], [[a]])
-backward weights biases activate' input output final_output desired_output outer_delta outer_weights
-    = let learning_rate = 0.2 
-          deltas = case outer_delta of  [] -> elemul (map (\x -> x*(x-1)) output) (zipWith (-) output desired_output)
-                                        _  -> compDelta outer_weights outer_delta activate' input
-          new_weights = [[ w - learning_rate*d*i  |  (i, w) <- zip input weightvec] | d <- deltas, weightvec <- weights]                                                  
-      in (deltas, new_weights)
+backward :: Weights -> Biases -> Activation' -> [Double] -> [Double] -> [Double] -> [Double] -> Deltas -> Weights -> (Deltas, Weights)
+backward weights biases activate' input output finalOutput desiredOutput outerDelta outerWeights
+    = let learningRate = 0.2 
+          deltas = compDelta outerWeights outerDelta activate' input output desiredOutput
+          newWeights = [[ w - learningRate*d*i  |  (i, w) <- zip input weightvec ] | d <- deltas, weightvec <- weights]                                                  
+      in (deltas, newWeights)
 
 coalg :: (Fix Layer, ([Inputs], FinalOutput, DesiredOutput, Deltas, Weights)) -> Layer  (Fix Layer, ([Inputs], FinalOutput, DesiredOutput, Deltas, Weights)) 
 coalg (Fx (Layer weights biases (activate, activate') innerLayer), 
-            ((output:input:xs), final_output, desired_output, outerDelta, outerWeights))
-    =   Layer new_weights biases (activate, activate') 
-                (innerLayer, ((input:xs), final_output, desired_output, delta, weights))
-        where (delta, new_weights) = 
-                (backward weights biases activate' input output final_output desired_output outerDelta outerWeights)
+            ((output:input:xs), finalOutput, desiredOutput, outerDelta, outerWeights))
+    =   Layer newWeights biases (activate, activate') 
+                (innerLayer, ((input:xs), finalOutput, desiredOutput, delta, weights))
+        where (delta, newWeights) = 
+                (backward weights biases activate' input output finalOutput desiredOutput outerDelta outerWeights)
 coalg (Fx InputLayer, output)
     =  InputLayer 
 
 train :: Fix Layer -> LossFunction -> Inputs -> DesiredOutput -> Fix Layer 
 train neuralnet lossfunction sample desiredoutput 
-    = ana coalg $ (nn, (activation_values, head activation_values, desiredoutput, [], [[]]) )
+    = trace (show $ head activation_values) $ ana coalg $ (nn, (activation_values, head activation_values, desiredoutput, [], [[]]) )
         where 
             (nn, diff_fun)      = cata alg neuralnet
             activation_values   = diff_fun [sample]
@@ -104,7 +103,7 @@ example =  (Fx ( Layer [[3.0,6.0,2.0],[2.0,1.0,7.0],[6.0,5.0,2.0]] [0, 0, 0] (si
             (Fx ( Layer [[4.0,0.5,2.0],[1.0,1.0,2.0],[3.0,0.0,4.0]] [0, 0, 0] (sigmoid, sigmoid')
              (Fx   InputLayer ) ) ) ) )
 
-main = print $ show $ train example loss [1.0, 2.0, 3.0] [-26.0]
+main = print $ show $ train example loss [1.0, 2.0, 0.2] [-26.0, 5.0, 3.0]
 
 newtype Fox f g = Fo (f (Fox g f))
 
