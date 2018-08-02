@@ -22,29 +22,13 @@ import Data.Traversable
 import Data.List
 import Data.Ord
 import Text.Show.Functions
-import qualified V as V
-import V (Vector((:-)))
+import qualified Vector as Vector
+import Vector (Vector((:-)))
 import Debug.Trace
 
-doggo :: Functor f => (f (Fix f, t) -> f (Fix f)) -> (f (Fix f, t) -> t) -> Fix f -> (Fix f, t)
-doggo algx algy = app . fmap (doggo algx algy) . unFix
-        where app = \k -> (Fx (algx k), algy k)
-
-ella  :: Functor f =>  ((Fix f, t) -> (t -> f (Fix f, t))) -> ((Fix f, t) -> t) -> (Fix f, t) -> Fix f 
-ella  algx algy = Fx . fmap (ella algx algy) . app
-        where app = \k -> (algx k) (algy k )        
-
-----------------------------------------------------------------------------------------------------------------------------------------
-----------------------------------------------------------------------------------------------------------------------------------------    
-data Layer k where
-    Layer       :: Weights -> Biases -> (Activation, Activation') -> k -> Layer k
-    InputLayer  :: Layer k 
-    deriving Show
-
-instance Functor (Layer) where
-    fmap eval (Layer weights biases activate k)      = Layer weights biases activate (eval k) 
-    fmap eval (InputLayer )                          = InputLayer 
-
+---- |‾| -------------------------------------------------------------- |‾| ----
+ --- | |                          Alg & Coalg                           | | ---
+  --- ‾------------------------------------------------------------------‾---
 
 algx :: Layer (Fix Layer, ([Inputs] -> [Inputs]) ) -> Layer (Fix Layer)
 algx (Layer weights biases (activate, activate') (innerLayer, forwardPass) )   
@@ -73,6 +57,10 @@ coalgy (Fx (Layer weights biases (activate, activate') innerLayer), backPropData
 coalgy (Fx InputLayer, backPropData)
     =   backPropData
 
+---- |‾| -------------------------------------------------------------- |‾| ----
+ --- | |                    Forward & Back Propagation                  | | ---
+  --- ‾------------------------------------------------------------------‾---
+
 compDelta ::  Activation' -> Inputs -> Outputs -> BackPropData -> Deltas 
 compDelta derivActivation inputs outputs (BackPropData _ finalOutput desiredOutput outerDeltas outerWeights)   
     = case outerDeltas of  [] -> elemul (map (\x -> x*(x-1)) outputs) (zipWith (-) outputs desiredOutput)
@@ -90,6 +78,10 @@ backward weights biases inputs (BackPropData {outerDeltas = updatedDeltas, ..} )
           updatedBiases  = map (learningRate *) updatedDeltas
       in (updatedWeights, updatedBiases)
 
+---- |‾| -------------------------------------------------------------- |‾| ----
+ --- | |                    Running And Constructing NNs                | | ---
+  --- ‾------------------------------------------------------------------‾---
+
 train :: Fix Layer -> LossFunction -> Inputs -> DesiredOutput -> Fix Layer 
 train neuralnet lossfunction sample desiredoutput 
     = trace (show $ head inputStack) $ 
@@ -104,7 +96,7 @@ trains neuralnet lossfunction samples desiredoutputs
 
 construct :: [(Weights, Biases, Activation, Activation')] -> Fix Layer
 construct (x:xs) = Fx (Layer weights biases (activation, activation') (construct (xs)))
-    where (weights, biases, activation, activation') = x
+            where (weights, biases, activation, activation') = x
 construct []       = Fx InputLayer
 
 
@@ -114,7 +106,13 @@ example =  (Fx ( Layer [[3.0,6.0,2.0],[2.0,1.0,7.0],[6.0,5.0,2.0]] [0, 0, 0] (si
 
 main = print $ show $ train example loss [1.0, 2.0, 0.2] [-26.0, 5.0, 3.0]
 
+
+
+
+
 newtype Fox f g = Fox (f (Fox g f))
+
+
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
