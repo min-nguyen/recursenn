@@ -29,7 +29,6 @@ import Debug.Trace
 sigmoid :: Double -> Double
 sigmoid lx = 1.0 / (1.0 + exp (negate lx))
 
-
 loss :: Fractional a => [a] -> [a] -> a
 loss output desired_output 
     = (1/(fromIntegral $ length output)) * (sum $ map ((\x -> x*x) . (abs)) (zipWith (-) output desired_output))
@@ -37,6 +36,10 @@ loss output desired_output
 sigmoid' :: Double -> Double
 sigmoid' x = let sig = (sigmoid x) in sig * (1.0 - sig)
     
+doggo :: Functor f => (f (Fix f, t) -> f (Fix f)) -> (f (Fix f, t) -> t) -> Fix f -> (Fix f, t)
+doggo algx algy = app . fmap (doggo algx algy) . unFix
+        where app = \k -> (Fx (algx k), algy k)
+
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------    
 data Layer k where
