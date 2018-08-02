@@ -5,11 +5,17 @@
      UndecidableInstances,
      FlexibleInstances,
      ScopedTypeVariables,
+     MultiParamTypeClasses,
+     FlexibleContexts,
+     TypeFamilies,
      GADTs,
      DataKinds,
-     KindSignatures #-}
+     KindSignatures,
+     RecordWildCards #-}
 
 module Lib where
+
+import Text.Show.Functions
 
 ---- |‾| -------------------------------------------------------------- |‾| ----
  --- | |                        Type Definitions                        | | ---
