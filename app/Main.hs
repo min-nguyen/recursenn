@@ -62,7 +62,7 @@ coalgx :: (Fix Layer, BackPropData) -> (BackPropData -> Layer  (Fix Layer, BackP
 coalgx (Fx (Layer weights biases (activate, activate') innerLayer), 
             (BackPropData { inputStack = (output:input:xs), .. }))
     =  (\backPropData ->  let (delta, newWeights) = (backward_d weights biases input backPropData)
-                          in Layer newWeights biases (activate, activate') (innerLayer, backPropData))
+                          in Layer newWeights biases (activate, activate') (innerLayer, backPropData {outerWeights = weights}))
 coalgx (Fx InputLayer, output)
     =  \_ -> InputLayer 
 
@@ -94,7 +94,8 @@ backward weights biases activate' inputs outputs backPropData
 backward_d :: Weights -> Biases -> Inputs  -> BackPropData -> (Deltas, Weights)
 backward_d weights biases inputs (BackPropData {outerDeltas = deltas, ..} )
     = let learningRate = 0.2
-          newWeights = [[ w - learningRate*d*i  |  (i, w) <- zip inputs weightvec ] | d <- deltas, weightvec <- weights]                                                  
+          inputsDeltasWeights = map (zip3 inputs deltas) weights
+          newWeights = [[ w - learningRate*d*i  |  (i, w, d) <- idw_vec ] | idw_vec <- inputsDeltasWeights]                                                  
       in (deltas, newWeights)
 
 
