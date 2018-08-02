@@ -17,6 +17,7 @@ module Lib where
 
 import Text.Show.Functions
 
+
 ---- |‾| -------------------------------------------------------------- |‾| ----
  --- | |                        Fully Connected NN                      | | ---
   --- ‾------------------------------------------------------------------‾---
@@ -55,7 +56,7 @@ type Deltas             = [Double]
 
 data CNNLayer k where
     ConvolutionalLayer      :: [Filter] -> [Biases] -> k -> CNNLayer k
-    ReluLayer               :: Stride -> CNNLayer k 
+    ReluLayer               :: k -> CNNLayer k 
     PoolingLayer            :: Stride -> SpatialExtent -> k -> CNNLayer k 
     FullyConnectedLayer     :: CNNLayer k
     deriving (Functor, Show)
@@ -131,3 +132,6 @@ eleaddm m1 m2 =  [ zipWith (+) v1 v2 |  (v1, v2) <- (zip m1 m2) ]
 
 fillMatrix :: Fractional a => Int -> Int -> a -> [[a]]
 fillMatrix m n a = replicate m $ replicate n a
+
+map3 :: (a -> b) -> [[[a]]] -> [[[b]]]
+map3 f xs = map (map (map f )) xs

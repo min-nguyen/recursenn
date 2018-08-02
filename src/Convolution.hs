@@ -67,11 +67,11 @@ alg (ConvolutionalLayer filters biases (innerLayer, forwardPass))
             in  (([(convolute3D filter) inputVolume 1 | filter <- filters]):imageStacks) ) . forwardPass)
 alg (PoolingLayer stride spatialExtent (innerLayer, forwardPass))
         = (Fx (PoolingLayer stride spatialExtent innerLayer), (\imageStack -> ((map (pool stride spatialExtent) (head imageStack)):imageStack) ) . forwardPass  )
-alg (ReluLayer stride spatialExtent (innerLayer, forwardPass))
-        = 
+alg (ReluLayer (innerLayer, forwardPass))
+        = (Fx (ReluLayer innerLayer), (\imageStacks -> ((map3 abs (head imageStacks)):imageStacks) ) . forwardPass)
 
 
-            
+
 -- coalg :: (Fix CNNLayer, ImageStack) -> CNNLayer (Fix CNNLayer, ImageStack )
 -- coalg (Fx (ConvolutionalLayer filters biases innerLayer), imageStack )
 --         = ...
