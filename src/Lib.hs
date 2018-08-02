@@ -60,8 +60,9 @@ data CNNLayer k where
     FullyConnectedLayer     :: CNNLayer k
     deriving (Functor, Show)
 
-type Filter             = [[[Double]]]
-type Image              = [[[Double]]]
+type Filter             = [[[Double]]]       
+type Image              = [[[Double]]]       
+type ImageStack         = [Image]
 type Stride             = Int
 
 
@@ -121,3 +122,12 @@ mvmul mat vec = map (sum . (zipWith (*) vec)) mat
 
 elemul :: Num a => [a] -> [a] -> [a]
 elemul v1 v2 = zipWith (*) v1 v2
+
+elemulm :: Num a => [[a]] -> [[a]] -> [[a]]
+elemulm m1 m2 =  [ zipWith (*) v1 v2 |  (v1, v2) <- (zip m1 m2) ]
+
+eleaddm :: Num a => [[a]] -> [[a]] -> [[a]]
+eleaddm m1 m2 =  [ zipWith (+) v1 v2 |  (v1, v2) <- (zip m1 m2) ]
+
+fillMatrix :: Fractional a => Int -> Int -> a -> [[a]]
+fillMatrix m n a = replicate m $ replicate n a

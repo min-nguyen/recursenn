@@ -30,7 +30,7 @@ import Debug.Trace
  --- | |                          Alg & Coalg                           | | ---
   --- ‾------------------------------------------------------------------‾---
 
-flatten :: Num a => [[a]] -> Int -> [[a]]
+flatten :: Fractional a => [[a]] -> Int -> [[a]]
 flatten image n =
     let splitVertical image' stackArray =   
                                 if length image' < n 
@@ -42,14 +42,31 @@ flatten image n =
                                                  in  splitHorizontal image'' (map tail imageChunk) new_stack
     in chunksOf (n*n) (splitVertical image [])
 
-convolute :: [[Double]] -> [[Double]] -> [Double]
-convolute filter image 
+convolute2D :: Fractional a => [[a]] -> [[a]] -> [[a]]
+convolute2D filter image 
     = let flat_image = flatten image (length filter)
-      in  map ( (sum . (zipWith (*) (concat filter)))) flat_image
+      in  chunksOf (length filter) $ map  (sum . (zipWith (*) (concat filter))) flat_image
 
--- alg :: CNNLayer (Fix CNNLayer, ([Image] -> [Image]) ) -> CNNLayer (Fix CNNLayer, ([Image] -> [Image]))
--- alg ConvolutionalLayer filters biases (innerLayer, imageStack)
---     = 
+convolute3D :: Fractional a => [[[a]]] -> [[[a]]] -> [[a]]
+convolute3D filter image 
+    = let n     = length filter
+          bias  = 1.0
+      in  map (map (bias + )) $ foldr eleaddm (fillMatrix n n 0.0) [  convolute2D filter2d image2d  |  (image2d, filter2d) <- (zip image filter)]
+
+-- Each filter is applied to the entire depth of images in the current stack of 2D images, so
+-- must have the same depth as the input volume
+-- Each filter will produce a separate 2D activation map (output volume)
+-- Each output volume by a filter, can be interpreted as an output of a neuron
+-- Given a receptive field size of 3x3 and input volume of 16x16x20, every neuron in the conv layer
+-- would now have a total of 3*3*20 = 180 connections to the input volume. The connectivity is local
+-- in space (3x3) but along the full input depth (20).
+-- The depth of the output volume is the number of filters we used
+
+-- alg :: CNNLayer (Fix CNNLayer, ([ImageStack] -> [ImageStack]) ) -> CNNLayer (Fix CNNLayer, ([ImageStack] -> [ImageStack]))
+-- alg ConvolutionalLayer filters biases (innerLayer, forwardPass)
+--        = (\imageStacks -> 
+--             let inputVolume = (head imageStacks) 
+--                 [map (convolute filter) inputVolume | filter <- filters]) . forwardPass
 
 
 
