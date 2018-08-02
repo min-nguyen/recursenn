@@ -30,8 +30,8 @@ doggo :: Functor f => (f (Fix f, t) -> f (Fix f)) -> (f (Fix f, t) -> t) -> Fix 
 doggo algx algy = app . fmap (doggo algx algy) . unFix
         where app = \k -> (Fx (algx k), algy k)
 
-hanna :: Functor f =>  ((Fix f, t) -> (t -> f (Fix f, t))) -> ((Fix f, t) -> t) -> (Fix f, t) -> Fix f 
-hanna algx algy = Fx . fmap (hanna algx algy) . app
+ella  :: Functor f =>  ((Fix f, t) -> (t -> f (Fix f, t))) -> ((Fix f, t) -> t) -> (Fix f, t) -> Fix f 
+ella  algx algy = Fx . fmap (ella algx algy) . app
         where app = \k -> (algx k) (algy k )        
 
 ----------------------------------------------------------------------------------------------------------------------------------------
@@ -59,16 +59,14 @@ algy InputLayer
     = id
 
 coalgx :: (Fix Layer, BackPropData) -> (BackPropData -> Layer  (Fix Layer, BackPropData) )
-coalgx (Fx (Layer weights biases (activate, activate') innerLayer), 
-            (BackPropData { inputStack = (output:input:xs), .. }))
-    =  \backPropData -> let (delta, newWeights) = (backward_d weights biases input backPropData)
-                        in Layer newWeights biases (activate, activate') (innerLayer, backPropData {outerWeights = weights})
+coalgx (Fx (Layer weights biases (activate, activate') innerLayer), (BackPropData { inputStack = (output:input:xs), .. }))
+    =  \backPropData -> let (newWeights, newBiases) = (backward weights biases input backPropData)
+                        in Layer newWeights newBiases (activate, activate') (innerLayer, backPropData {outerWeights = weights})
 coalgx (Fx InputLayer, output)
     =  \_ -> InputLayer 
 
 coalgy :: (Fix Layer, BackPropData) -> BackPropData
-coalgy (Fx (Layer weights biases (activate, activate') innerLayer), 
-            backPropData)
+coalgy (Fx (Layer weights biases (activate, activate') innerLayer), backPropData)
     =   let BackPropData { inputStack = (outputs:inputs:xs), .. } = backPropData
             delta = compDelta activate' inputs outputs backPropData
         in  backPropData { inputStack = (inputs:xs), outerDeltas = delta }
@@ -84,26 +82,18 @@ forward :: Weights -> Biases -> Activation -> ([Inputs] -> [Inputs]) -> ([Inputs
 forward weights biases activate k 
     = (\inputs -> (map activate ((zipWith (+) (map ((sum)  . (zipWith (*) (head inputs))) weights) biases))):inputs) . k
 
-backward :: Weights -> Biases -> Activation' -> Inputs -> Outputs -> BackPropData -> (Deltas, Weights)
-backward weights biases activate' inputs outputs backPropData
-    = let learningRate = 0.2 
-          updatedDeltas = compDelta activate' inputs outputs backPropData
-          inputsDeltasWeights = map (zip3 inputs updatedDeltas) weights
-          updatedWeights = [[ w - learningRate*d*i  |  (i, w, d) <- idw_vec ] | idw_vec <- inputsDeltasWeights]                                                      
-      in (updatedDeltas, updatedWeights)
-
-backward_d :: Weights -> Biases -> Inputs  -> BackPropData -> (Deltas, Weights)
-backward_d weights biases inputs (BackPropData {outerDeltas = updatedDeltas, ..} )
+backward :: Weights -> Biases -> Inputs  -> BackPropData -> (Weights, Biases)
+backward weights biases inputs (BackPropData {outerDeltas = updatedDeltas, ..} )
     = let learningRate = 0.2
           inputsDeltasWeights = map (zip3 inputs updatedDeltas) weights
           updatedWeights = [[ w - learningRate*d*i  |  (i, w, d) <- idw_vec ] | idw_vec <- inputsDeltasWeights]                                                  
-      in (updatedDeltas, updatedWeights)
-
+          updatedBiases  = map (learningRate *) updatedDeltas
+      in (updatedWeights, updatedBiases)
 
 train :: Fix Layer -> LossFunction -> Inputs -> DesiredOutput -> Fix Layer 
 train neuralnet lossfunction sample desiredoutput 
     = trace (show $ head inputStack) $ 
-        hanna coalgx coalgy $ (nn, BackPropData inputStack (head inputStack) desiredoutput [] [[]] )
+        ella coalgx coalgy $ (nn, BackPropData inputStack (head inputStack) desiredoutput [] [[]] )
             where 
                 (nn, diff_fun)      = doggo algx algy neuralnet
                 inputStack   = diff_fun [sample]
