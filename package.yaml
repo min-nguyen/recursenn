@@ -26,6 +26,7 @@ dependencies:
 - natural
 - monomorphic
 - singletons
+- split
 # - GHC-Types
 library:
   source-dirs: src

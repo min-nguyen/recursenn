@@ -18,15 +18,8 @@ module Lib where
 import Text.Show.Functions
 
 ---- |‾| -------------------------------------------------------------- |‾| ----
- --- | |                        Type Definitions                        | | ---
+ --- | |                        Fully Connected NN                      | | ---
   --- ‾------------------------------------------------------------------‾---
-
-type CoAlgebra f a = a -> f a
-
-newtype Fix f = Fx (f (Fix f))
-
-instance (Show (f (Fix f))) => Show (Fix f) where
-    showsPrec p (Fx x) = showParen (p >= 11) (showString "Fx " . showsPrec 11 x)
 
 data Layer k where
     Layer       :: Weights -> Biases -> (Activation, Activation') -> k -> Layer k
@@ -57,8 +50,31 @@ type FinalOutput        = [Double]
 type Deltas             = [Double]
 
 ---- |‾| -------------------------------------------------------------- |‾| ----
+ --- | |                        Convolutional NN                        | | ---
+  --- ‾------------------------------------------------------------------‾---
+
+data CNNLayer k where
+    ConvolutionalLayer      :: [Filter] -> [Biases] -> k -> CNNLayer k
+    ReluLayer               :: Stride -> CNNLayer k 
+    PoolingLayer            :: CNNLayer k 
+    FullyConnectedLayer     :: CNNLayer k
+    deriving (Functor, Show)
+
+type Filter             = [[[Double]]]
+type Image              = [[[Double]]]
+type Stride             = Int
+
+
+---- |‾| -------------------------------------------------------------- |‾| ----
  --- | |                        Recursive Definitions                   | | ---
   --- ‾------------------------------------------------------------------‾---
+
+type CoAlgebra f a = a -> f a
+
+newtype Fix f = Fx (f (Fix f))
+
+instance (Show (f (Fix f))) => Show (Fix f) where
+    showsPrec p (Fx x) = showParen (p >= 11) (showString "Fx " . showsPrec 11 x)
 
 unFix :: Fix f -> f (Fix f)
 unFix (Fx x) = x
