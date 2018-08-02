@@ -1,5 +1,4 @@
 {-# LANGUAGE
-  
      DeriveFunctor,
      DeriveFoldable,
      DeriveTraversable,
@@ -13,20 +12,23 @@
 module Lib where
 
 type CoAlgebra f a = a -> f a
-newtype Fix f = Fx (f (Fix f)) 
+
+newtype Fix f = Fx (f (Fix f))
+
 instance (Show (f (Fix f))) => Show (Fix f) where
     showsPrec p (Fx x) = showParen (p >= 11) (showString "Fx " . showsPrec 11 x)
 
-type BackProp = (FinalOutput, Inputs, DesiredOutput)
-type Weights = [[Double]]
-type Biases  =  [Double]
-type Inputs  =  [Double]
-type Activation = Double -> Double
-type Activation' = Double -> Double
-type LossFunction = [Double] -> [Double] -> Double
-type DesiredOutput =  [Double]
-type FinalOutput =  [Double]
-type Deltas = [Double]
+type BackPropData       = ([Inputs], FinalOutput, DesiredOutput, Deltas, Weights)
+type Weights            = [[Double]]
+type Biases             = [Double]
+type Inputs             = [Double]
+type Outputs            = [Double]
+type Activation         =  Double  ->  Double
+type Activation'        =  Double  ->  Double
+type LossFunction       = [Double] -> [Double] -> Double
+type DesiredOutput      = [Double]
+type FinalOutput        = [Double]
+type Deltas             = [Double]
 
 unFix :: Fix f -> f (Fix f)
 unFix (Fx x) = x
