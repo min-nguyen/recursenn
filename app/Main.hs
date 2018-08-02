@@ -10,7 +10,8 @@
      TypeFamilies,
      GADTs,
      DataKinds,
-     KindSignatures #-}
+     KindSignatures,
+     RecordWildCards #-}
 
 module Main where
 
@@ -25,20 +26,13 @@ import qualified V as V
 import V (Vector((:-)))
 import Debug.Trace
 
-
-sigmoid :: Double -> Double
-sigmoid lx = 1.0 / (1.0 + exp (negate lx))
-
-loss :: Fractional a => [a] -> [a] -> a
-loss output desired_output 
-    = (1/(fromIntegral $ length output)) * (sum $ map ((\x -> x*x) . (abs)) (zipWith (-) output desired_output))
-
-sigmoid' :: Double -> Double
-sigmoid' x = let sig = (sigmoid x) in sig * (1.0 - sig)
-    
 doggo :: Functor f => (f (Fix f, t) -> f (Fix f)) -> (f (Fix f, t) -> t) -> Fix f -> (Fix f, t)
 doggo algx algy = app . fmap (doggo algx algy) . unFix
         where app = \k -> (Fx (algx k), algy k)
+
+hanna :: Functor f =>  ((Fix f, t) -> (t -> f (Fix f, t))) -> ((Fix f, t) -> t) -> (Fix f, t) -> Fix f 
+hanna algx algy = Fx . fmap (hanna algx algy) . app
+        where app = \k -> (algx k) (algy k )        
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------    
@@ -51,21 +45,44 @@ instance Functor (Layer) where
     fmap eval (Layer weights biases activate k)      = Layer weights biases activate (eval k) 
     fmap eval (InputLayer )                          = InputLayer 
 
+
+algx :: Layer (Fix Layer, ([Inputs] -> [Inputs]) ) -> Layer (Fix Layer)
+algx (Layer weights biases (activate, activate') (innerLayer, forwardPass) )   
+    =  Layer weights biases (activate, activate') innerLayer
+algx InputLayer 
+    =  InputLayer
+
+algy :: Layer (Fix Layer, ([Inputs] -> [Inputs]) ) -> ([Inputs] -> [Inputs])
+algy (Layer weights biases (activate, _) (innerLayer, forwardPass) )
+    = forward weights biases activate forwardPass   
+algy InputLayer
+    = id
+
+coalgx :: (Fix Layer, BackPropData) -> (BackPropData -> Layer  (Fix Layer, BackPropData) )
+coalgx (Fx (Layer weights biases (activate, activate') innerLayer), 
+            (BackPropData { inputStack = (output:input:xs), .. }))
+    =  (\backPropData ->  let (delta, newWeights) = (backward_d weights biases input backPropData)
+                          in Layer newWeights biases (activate, activate') (innerLayer, backPropData))
+coalgx (Fx InputLayer, output)
+    =  \_ -> InputLayer 
+
+coalgy :: (Fix Layer, BackPropData) -> BackPropData
+coalgy (Fx (Layer weights biases (activate, activate') innerLayer), 
+            backPropData)
+    =   let BackPropData { inputStack = (outputs:inputs:xs), .. } = backPropData
+            delta = compDelta activate' inputs outputs backPropData
+        in  backPropData { inputStack = (inputs:xs), outerDeltas = delta }
+coalgy (Fx InputLayer, backPropData)
+    =   backPropData
+
+compDelta ::  Activation' -> Inputs -> Outputs -> BackPropData -> Deltas 
+compDelta derivActivation inputs outputs (BackPropData _ finalOutput desiredOutput outerDeltas outerWeights)   
+    = case outerDeltas of  [] -> elemul (map (\x -> x*(x-1)) outputs) (zipWith (-) outputs desiredOutput)
+                           _  -> elemul (mvmul (transpose outerWeights) outerDeltas) (map derivActivation inputs)
+
 forward :: Weights -> Biases -> Activation -> ([Inputs] -> [Inputs]) -> ([Inputs] -> [Inputs])
 forward weights biases activate k 
     = (\inputs -> (map activate ((zipWith (+) (map ((sum)  . (zipWith (*) (head inputs))) weights) biases))):inputs) . k
-
-alg :: Layer (Fix Layer, ([Inputs] -> [Inputs]) ) -> (Fix Layer, ([Inputs] -> [Inputs]))
-alg (Layer weights biases (activate, activate') (innerLayer, forwardPass) )   
-    =  (Fx (Layer weights biases (activate, activate') innerLayer ) , updated_inputs )
-        where updated_inputs = (forward weights biases activate forwardPass)
-alg (InputLayer )                     
-    =  (Fx InputLayer, id)
-
-compDelta ::  Activation' -> Inputs -> Outputs -> BackPropData ->Deltas 
-compDelta derivActivation inputs outputs (_, finalOutput, desiredOutput, outerDeltas, outerWeights)   
-    = case outerDeltas of  [] -> elemul (map (\x -> x*(x-1)) outputs) (zipWith (-) outputs desiredOutput)
-                           _  -> elemul (mvmul (transpose outerWeights) outerDeltas) (map derivActivation inputs)
 
 backward :: Weights -> Biases -> Activation' -> Inputs -> Outputs -> BackPropData -> (Deltas, Weights)
 backward weights biases activate' inputs outputs backPropData
@@ -74,23 +91,20 @@ backward weights biases activate' inputs outputs backPropData
           newWeights = [[ w - learningRate*d*i  |  (i, w) <- zip inputs weightvec ] | d <- deltas, weightvec <- weights]                                                  
       in (deltas, newWeights)
 
-coalg :: (Fix Layer, BackPropData) -> Layer  (Fix Layer, BackPropData) 
-coalg (Fx (Layer weights biases (activate, activate') innerLayer), 
-            ((output:input:xs), finalOutput, desiredOutput, outerDelta, outerWeights))
-    =   Layer newWeights biases (activate, activate') 
-            (innerLayer, ((input:xs), finalOutput, desiredOutput, delta, weights))
-        where (delta, newWeights) = 
-                (backward weights biases activate' input output ((input:xs), finalOutput, desiredOutput, outerDelta, outerWeights))
-coalg (Fx InputLayer, output)
-    =  InputLayer 
+backward_d :: Weights -> Biases -> Inputs  -> BackPropData -> (Deltas, Weights)
+backward_d weights biases inputs (BackPropData {outerDeltas = deltas, ..} )
+    = let learningRate = 0.2
+          newWeights = [[ w - learningRate*d*i  |  (i, w) <- zip inputs weightvec ] | d <- deltas, weightvec <- weights]                                                  
+      in (deltas, newWeights)
+
 
 train :: Fix Layer -> LossFunction -> Inputs -> DesiredOutput -> Fix Layer 
 train neuralnet lossfunction sample desiredoutput 
-    = trace (show $ head activation_values) $ 
-        ana coalg $ (nn, (activation_values, head activation_values, desiredoutput, [], [[]]) )
+    = trace (show $ head inputStack) $ 
+        hanna coalgx coalgy $ (nn, BackPropData inputStack (head inputStack) desiredoutput [] [[]] )
             where 
-                (nn, diff_fun)      = cata alg neuralnet
-                activation_values   = diff_fun [sample]
+                (nn, diff_fun)      = doggo algx algy neuralnet
+                inputStack   = diff_fun [sample]
 
 trains :: Fix Layer -> LossFunction -> [Inputs] -> [DesiredOutput] -> Fix Layer
 trains neuralnet lossfunction samples desiredoutputs  

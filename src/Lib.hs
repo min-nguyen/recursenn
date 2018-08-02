@@ -18,7 +18,13 @@ newtype Fix f = Fx (f (Fix f))
 instance (Show (f (Fix f))) => Show (Fix f) where
     showsPrec p (Fx x) = showParen (p >= 11) (showString "Fx " . showsPrec 11 x)
 
-type BackPropData       = ([Inputs], FinalOutput, DesiredOutput, Deltas, Weights)
+data BackPropData       = BackPropData  { 
+                                         inputStack     :: [Inputs], 
+                                         finalOutput    :: FinalOutput, 
+                                         desiredOutput  :: DesiredOutput, 
+                                         outerDeltas    :: Deltas, 
+                                         outerWeights   :: Weights
+                                        }
 type Weights            = [[Double]]
 type Biases             = [Double]
 type Inputs             = [Double]
@@ -39,6 +45,17 @@ cata alg = alg . fmap (cata alg) . unFix
 ana :: Functor f => (a -> f a) -> (a -> Fix f)
 ana coalg = Fx . fmap (ana coalg) . coalg
 
+------------------------------------------------
+
+sigmoid :: Double -> Double
+sigmoid lx = 1.0 / (1.0 + exp (negate lx))
+
+sigmoid' :: Double -> Double
+sigmoid' x = let sig = (sigmoid x) in sig * (1.0 - sig)
+
+loss :: Fractional a => [a] -> [a] -> a
+loss output desired_output 
+    = (1/(fromIntegral $ length output)) * (sum $ map ((\x -> x*x) . (abs)) (zipWith (-) output desired_output))
 
 ------------------------------------------------
 
