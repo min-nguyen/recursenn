@@ -56,7 +56,7 @@ type Deltas             = [Double]
 data CNNLayer k where
     ConvolutionalLayer      :: [Filter] -> [Biases] -> k -> CNNLayer k
     ReluLayer               :: Stride -> CNNLayer k 
-    PoolingLayer            :: CNNLayer k 
+    PoolingLayer            :: Stride -> SpatialExtent -> k -> CNNLayer k 
     FullyConnectedLayer     :: CNNLayer k
     deriving (Functor, Show)
 
@@ -64,7 +64,7 @@ type Filter             = [[[Double]]]
 type Image              = [[[Double]]]       
 type ImageStack         = [Image]
 type Stride             = Int
-
+type SpatialExtent      = Int
 
 ---- |‾| -------------------------------------------------------------- |‾| ----
  --- | |                        Recursive Definitions                   | | ---
