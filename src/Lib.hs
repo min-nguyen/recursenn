@@ -18,54 +18,6 @@ module Lib where
 import Text.Show.Functions
 
 
----- |‾| -------------------------------------------------------------- |‾| ----
- --- | |                        Fully Connected NN                      | | ---
-  --- ‾------------------------------------------------------------------‾---
-
-data Layer k where
-    Layer       :: Weights -> Biases -> (Activation, Activation') -> k -> Layer k
-    InputLayer  :: Layer k 
-    deriving Show
-
-instance Functor (Layer) where
-    fmap eval (Layer weights biases activate k)      = Layer weights biases activate (eval k) 
-    fmap eval (InputLayer )                          = InputLayer 
-
-data BackPropData       = BackPropData  { 
-                                         inputStack     :: [Inputs], 
-                                         finalOutput    :: FinalOutput, 
-                                         desiredOutput  :: DesiredOutput, 
-                                         outerDeltas    :: Deltas, 
-                                         outerWeights   :: Weights
-                                        }
-
-type Weights            = [[Double]]
-type Biases             = [Double]
-type Inputs             = [Double]
-type Outputs            = [Double]
-type Activation         =  Double  ->  Double
-type Activation'        =  Double  ->  Double
-type LossFunction       = [Double] -> [Double] -> Double
-type DesiredOutput      = [Double]
-type FinalOutput        = [Double]
-type Deltas             = [Double]
-
----- |‾| -------------------------------------------------------------- |‾| ----
- --- | |                        Convolutional NN                        | | ---
-  --- ‾------------------------------------------------------------------‾---
-
-data CNNLayer k where
-    ConvolutionalLayer      :: [Filter] -> [Biases] -> k -> CNNLayer k
-    ReluLayer               :: k -> CNNLayer k 
-    PoolingLayer            :: Stride -> SpatialExtent -> k -> CNNLayer k 
-    FullyConnectedLayer     :: CNNLayer k
-    deriving (Functor, Show)
-
-type Filter             = [[[Double]]]       
-type Image              = [[[Double]]]       
-type ImageStack         = [Image]
-type Stride             = Int
-type SpatialExtent      = Int
 
 ---- |‾| -------------------------------------------------------------- |‾| ----
  --- | |                        Recursive Definitions                   | | ---
@@ -132,6 +84,9 @@ eleaddm m1 m2 =  [ zipWith (+) v1 v2 |  (v1, v2) <- (zip m1 m2) ]
 
 fillMatrix :: Fractional a => Int -> Int -> a -> [[a]]
 fillMatrix m n a = replicate m $ replicate n a
+
+map2 :: (a -> b) -> [[a]] -> [[b]]
+map2 f xs =  map (map f ) xs
 
 map3 :: (a -> b) -> [[[a]]] -> [[[b]]]
 map3 f xs = map (map (map f )) xs

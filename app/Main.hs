@@ -11,7 +11,8 @@
      GADTs,
      DataKinds,
      KindSignatures,
-     RecordWildCards #-}
+     RecordWildCards,
+     ExistentialQuantification #-}
 
 module Main where
 
@@ -22,9 +23,44 @@ import Data.Traversable
 import Data.List
 import Data.Ord
 import Text.Show.Functions
-import qualified Vector as Vector
+import qualified Vector as V
 import Vector (Vector((:-)))
 import Debug.Trace
+
+
+---- |‾| -------------------------------------------------------------- |‾| ----
+ --- | |                        Fully Connected NN                      | | ---
+  --- ‾------------------------------------------------------------------‾---
+
+
+data Layer k where
+    Layer       :: Weights -> Biases -> (Activation, Activation') -> k -> Layer k
+    InputLayer  :: Layer k 
+    deriving Show
+
+instance Functor (Layer) where
+    fmap eval (Layer weights biases activate k)      = Layer weights biases activate (eval k) 
+    fmap eval (InputLayer )                          = InputLayer 
+
+data BackPropData       = BackPropData  { 
+                                         inputStack     :: [Inputs], 
+                                         finalOutput    :: FinalOutput, 
+                                         desiredOutput  :: DesiredOutput, 
+                                         outerDeltas    :: Deltas, 
+                                         outerWeights   :: Weights
+                                        }
+
+type Weights            = [[Double]]
+type Biases             = [Double]
+type Inputs             = [Double]
+type Outputs            = [Double]
+type Activation         =  Double  ->  Double
+type Activation'        =  Double  ->  Double
+type LossFunction       = [Double] -> [Double] -> Double
+type DesiredOutput      = [Double]
+type FinalOutput        = [Double]
+type Deltas             = [Double]
+
 
 ---- |‾| -------------------------------------------------------------- |‾| ----
  --- | |                          Alg & Coalg                           | | ---
@@ -124,10 +160,10 @@ newtype Fox f g = Fox (f (Fox g f))
 --     InputLayer' :: Layer' o i k 
 
 
--- data Layer' (o::V.Nat) (i::V.Nat) k where
---     Layer' :: V.Vector (V.Vector Double i ) o  -> V.Vector Double i  -> Activation -> k -> Layer' o i k
+-- data Layer' o i k where
+--     Layer'      :: forall o i p k. (V.Nat' o, V.Nat' i, V.Nat' p) => V.Vector (V.Vector Double p ) o  -> V.Vector Double i  -> Activation -> k -> Layer' p i k
 --     InputLayer' :: Layer' o i k 
---     deriving Show
+--     -- deriving Show
     
 -- instance Functor (Layer' o i) where
 --     fmap eval (Layer' weights biases activate k)      = Layer' weights biases activate (eval k) 
@@ -148,12 +184,12 @@ newtype Fox f g = Fox (f (Fox g f))
 --             new_list_weights = transpose $ map (zipWith (+) (map (\xi -> learning_rate * xi * (desired_output - error)) input )) (transpose list_weights)
 --       in    V.unsafeFromList' $ map V.unsafeFromList' $ new_list_weights
 
--- alg' :: Layer' o i (Fox (Layer' j o) (Layer' o i ), ([Inputs] -> [Inputs]) ) 
---         -> (Fox (Layer' o i) (Layer' j o ), ([Inputs] -> [Inputs]))
+-- alg' :: forall o i p. (V.Nat' o, V.Nat' i, V.Nat' p) => Layer' o i (Fix (Layer' i p), ([Inputs] -> [Inputs]) ) 
+--         -> (Fix (Layer' o i), ([Inputs] -> [Inputs]))
 -- alg' (Layer' weights biases activate (innerLayer, forwardPass) )   
---     =  (Fo (Layer' weights biases activate innerLayer ) , (forward' weights biases activate forwardPass) )
+--     =  (Fx (Layer' weights biases activate innerLayer ) , (forward' weights biases activate forwardPass) )
 -- alg' (InputLayer' )                     
---     =  (Fo InputLayer', id )
+--     =  (Fx InputLayer', id )
 
 -- coalg' :: (V.SingRep o, V.SingRep i) => (Fox (Layer' o i) (Layer' j o), [Inputs]) 
 --         -> Layer' o i (Fox (Layer' j o) (Layer' l j), [Inputs]) 

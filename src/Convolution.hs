@@ -26,6 +26,34 @@ import qualified Vector as Vector
 import Vector (Vector((:-)))
 import Debug.Trace
 
+
+---- |‾| -------------------------------------------------------------- |‾| ----
+ --- | |                        Convolutional NN                        | | ---
+  --- ‾------------------------------------------------------------------‾---
+
+
+data CNNLayer k where
+    InputLayer              :: CNNLayer k
+    ConvolutionalLayer      :: [Filter] -> [Biases] -> k -> CNNLayer k
+    ReluLayer               :: k -> CNNLayer k 
+    PoolingLayer            :: Stride -> SpatialExtent -> k -> CNNLayer k 
+    FullyConnectedLayer     :: k -> CNNLayer k
+    deriving (Functor, Show)
+
+type Filter             = [[[Double]]]       
+type Image              = [[[Double]]]       
+type ImageStack         = [Image]
+type Stride             = Int
+type SpatialExtent      = Int
+type Biases             = [Double]
+type Deltas             = [[[Double]]]
+type DesiredOutput      = [[[Double]]]
+data BackPropData       = BackPropData {
+                                    imageStack      :: ImageStack,
+                                    outerDeltas     :: Deltas,
+                                    outerFilters    :: [Filter],
+                                    desiredOutput   :: DesiredOutput
+                                }
 ---- |‾| -------------------------------------------------------------- |‾| ----
  --- | |                          Alg & Coalg                           | | ---
   --- ‾------------------------------------------------------------------‾---
@@ -69,13 +97,20 @@ alg (PoolingLayer stride spatialExtent (innerLayer, forwardPass))
         = (Fx (PoolingLayer stride spatialExtent innerLayer), (\imageStack -> ((map (pool stride spatialExtent) (head imageStack)):imageStack) ) . forwardPass  )
 alg (ReluLayer (innerLayer, forwardPass))
         = (Fx (ReluLayer innerLayer), (\imageStacks -> ((map3 abs (head imageStacks)):imageStacks) ) . forwardPass)
+alg (InputLayer) = (Fx InputLayer, id)
 
 
 
--- coalg :: (Fix CNNLayer, ImageStack) -> CNNLayer (Fix CNNLayer, ImageStack )
--- coalg (Fx (ConvolutionalLayer filters biases innerLayer), imageStack )
---         = ...
 
+-- coalg :: (Fix CNNLayer, BackPropData) -> CNNLayer (Fix CNNLayer, BackPropData )
+-- coalg (Fx (FullyConnectedLayer innerLayer), BackPropData imageStack outerDeltas desiredOutput)
+--         =   let actualOutput = (head imageStack)
+--                 deltas       = [  [ 0.5 * (zipWith (-))  |  (a, d) <- (zip actOutput2d desOutput2d) ]    |  (actOutput2d, desOutput2d) <- (zip actualOutput desiredOutput)  ]
+--             in  FullyConnectedLayer (Fx innerLayer, BackPropData (tail imageStack) deltas desiredOutput)
+-- coalg (Fx (ConvolutionalLayer filters biases innerLayer), BackPropData imageStack outerDeltas desiredOutput)
+--         =   let deltas = elemul (mvmul (map2 transpose outerFilters) outerDeltas) (map derivActivation inputs)
+--                 newFilters = convolute3D deltas (head imageStack) 
+--             in  ConvolutionalLayer newFilters biases (innerLayer, BackPropData (tail imageStack) deltas desiredOutput)
 
 
 
