@@ -15,7 +15,7 @@
 
 module Convolution where
 
-import Lib
+import Utils
 import Data.Functor     
 import Data.Foldable
 import Data.Traversable
