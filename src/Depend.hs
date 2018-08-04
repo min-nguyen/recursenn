@@ -94,14 +94,14 @@ coalg' ((Layer' weights biases activate innerLayer), (x:y:ys))
 coalg' (InputLayer', output)      
     =  InputLayer'
 
-run ::  Layer' m n (Layer' n p k, ([Inputs] -> [Inputs]))
-        -> (Layer' m n (Layer' n p k), ([Inputs] -> [Inputs]))
-run (Layer' weights biases activate (innerLayer, forwardPass)) 
-    = let (p, f) = alg' innerLayer 
-      in (Layer' weights biases activate p, (forward' weights biases activate forwardPass)) 
-run (InputLayer')      
-    = let p = alg' InputLayer'
-      in  p
+-- run ::  Layer' m n (Layer' n p k, ([Inputs] -> [Inputs]))
+--         -> (Layer' m n (Layer' n p k), ([Inputs] -> [Inputs]))
+-- run (Layer' weights biases activate (innerLayer, forwardPass)) 
+--     = let p = alg' $ run innerLayer 
+--       in (Layer' weights biases activate p, (forward' weights biases activate forwardPass)) 
+-- run (InputLayer')      
+--     = let p = alg' InputLayer'
+--       in  p
 -- train' :: (V.SingRep o, V.SingRep i) => Fix (Layer' o i) -> LossFunction -> Inputs -> Fix (Layer' o i)
 -- train' neuralnet lossfunction sample = ana coalg' $ (nn,  diff_fun [sample])
 --   where 
