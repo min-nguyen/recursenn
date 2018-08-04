@@ -16,7 +16,7 @@
 module Lib where
 
 import Text.Show.Functions
-
+import Data.List (transpose)
 
 
 ---- |‾| -------------------------------------------------------------- |‾| ----
@@ -73,14 +73,23 @@ zipWithPadding  f xs     []     = xs
 mvmul :: Num a => [[a]] -> [a] -> [a]
 mvmul mat vec = map (sum . (zipWith (*) vec)) mat
 
-elemul :: Num a => [a] -> [a] -> [a]
+mmmul :: Fractional a => [[a]] -> [[a]] -> [[a]]
+mmmul m1 m2 = [ [ sum (zipWith (*) v2 v1)  | v2 <- (transpose m2) ] |  v1 <- m1 ]
+
+mmmul3 :: Fractional a => [[a]] -> [[a]] -> [[a]] -> [[a]]
+mmmul3 m1 m2 m3 = mmmul (mmmul m1 m2) m3
+
+elemul :: Fractional a => [a] -> [a] -> [a]
 elemul v1 v2 = zipWith (*) v1 v2
 
-elemulm :: Num a => [[a]] -> [[a]] -> [[a]]
+elemulm :: Fractional a => [[a]] -> [[a]] -> [[a]]
 elemulm m1 m2 =  [ zipWith (*) v1 v2 |  (v1, v2) <- (zip m1 m2) ]
 
-eleaddm :: Num a => [[a]] -> [[a]] -> [[a]]
+eleaddm :: Fractional a => [[a]] -> [[a]] -> [[a]]
 eleaddm m1 m2 =  [ zipWith (+) v1 v2 |  (v1, v2) <- (zip m1 m2) ]
+
+elesubm :: Fractional a => [[a]] -> [[a]] -> [[a]]
+elesubm m1 m2 =  [ zipWith (-) v1 v2 |  (v1, v2) <- (zip m1 m2) ]
 
 fillMatrix :: Fractional a => Int -> Int -> a -> [[a]]
 fillMatrix m n a = replicate m $ replicate n a
