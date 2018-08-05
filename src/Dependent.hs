@@ -28,9 +28,9 @@ import qualified Vector as V
 import Vector (Vector((:-)))
 import Debug.Trace
 
---------------------------------------------------------
--- DEPENDENT TYPED BUT INVALID FIX POINT RESTRICTIONS ON MATRIX SIZES
---------------------------------------------------------
+---- |‾| -------------------------------------------------------------- |‾| ----
+ --- | |                    Dependently Typed NN                        | | ---
+  --- ‾------------------------------------------------------------------‾---
 
 type Weights            = [[Double]]
 type Biases             = [Double]
@@ -48,17 +48,12 @@ data MatrixExpr m n k =
       Leaf (Matrix m n k)
     | forall p. Mult (MatrixExpr m p k) (MatrixExpr p n k)
 
-    
-data Layer m n k  =
-    forall p q. Layer (V.Vector (V.Vector Double n ) m) (V.Vector Double n) Activation (Layer' n p k)
-    | InputLayer 
-deriving instance Functor (Layer m n)
-
 data Layer' m n k =
       forall p. Layer' (V.Vector (V.Vector Double n ) m) (V.Vector Double n) Activation k
     | InputLayer' 
 deriving instance Functor (Layer' m n)
-    
+deriving instance Foldable (Layer' m n)
+
 forward' :: Fractional a => V.Vector (V.Vector a i) o -> V.Vector a i -> (a -> a) -> ([[a]] -> [[a]]) -> ([[a]] -> [[a]]) 
 forward' weights biases activate k 
     = (\inputs ->  ((map activate (zipWith (+) 
@@ -94,6 +89,8 @@ coalg' ((Layer' weights biases activate innerLayer), (x:y:ys))
 coalg' (InputLayer', output)      
     =  InputLayer'
 
+-- catafold = foldr (\(Layer' w b a (i, f)) (Layer' w' b' a' i', f') ->
+--                          (Layer' w' b' a' (alg' i), f' )) (Layer' ((V.Nil):-V.Nil) (V.Nil) sigmoid example') example'
 -- run ::  Layer' m n (Layer' n p k, ([Inputs] -> [Inputs]))
 --         -> (Layer' m n (Layer' n p k), ([Inputs] -> [Inputs]))
 -- run (Layer' weights biases activate (innerLayer, forwardPass)) 
@@ -107,9 +104,9 @@ coalg' (InputLayer', output)
 --   where 
 --     (nn, diff_fun) = cata alg' neuralnet
 
--- example' =  (Fx ( Layer' ((3.0:-10.0:-2.0:-V.Nil):-(3.0:-10.0:-2.0:-V.Nil):-(3.0:-10.0:-2.0:-V.Nil):-V.Nil) (0.0:-0.0:-0.0:-V.Nil) sigmoid
---              (Fx ( Layer' ((3.0:-1.0:-2.0:-V.Nil):-(3.0:-1.0:-2.0:-V.Nil):-(3.0:-1.0:-2.0:-V.Nil):-V.Nil) (0.0:-0.0:-0.0:-V.Nil) sigmoid
---               (Fx   InputLayer' ) ) ) ) )
+example' =  ( ( Layer' ((3.0:-10.0:-2.0:-V.Nil):-(3.0:-10.0:-2.0:-V.Nil):-(3.0:-10.0:-2.0:-V.Nil):-V.Nil) (0.0:-0.0:-0.0:-V.Nil) sigmoid
+             ( ( Layer' ((3.0:-1.0:-2.0:-V.Nil):-(3.0:-1.0:-2.0:-V.Nil):-(3.0:-1.0:-2.0:-V.Nil):-V.Nil) (0.0:-0.0:-0.0:-V.Nil) sigmoid
+              (   InputLayer' ) ) ) ) )
 
 
 --------------------------------------------------------
