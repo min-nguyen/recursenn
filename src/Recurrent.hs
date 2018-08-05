@@ -14,7 +14,7 @@
      RecordWildCards,
      ExistentialQuantification #-}
 
-module FullyConnected where
+module Recurrent where
 
 import Utils
 import Data.Functor     

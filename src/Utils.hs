@@ -99,3 +99,6 @@ map2 f xs =  map (map f ) xs
 
 map3 :: (a -> b) -> [[[a]]] -> [[[b]]]
 map3 f xs = map (map (map f )) xs
+
+transpose3D :: [[[a]]] -> [[[a]]]
+transpose3D mat = map transpose mat
