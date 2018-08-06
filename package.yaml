@@ -27,6 +27,7 @@ dependencies:
 - monomorphic
 - singletons
 - split
+- lens
 # - GHC-Types
 library:
   source-dirs: src

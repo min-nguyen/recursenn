@@ -102,3 +102,9 @@ map3 f xs = map (map (map f )) xs
 
 transpose3D :: [[[a]]] -> [[[a]]]
 transpose3D mat = map transpose mat
+
+replaceElement :: [a] -> Int -> a -> [a]
+replaceElement xs i x =
+    fore ++ (x : aft)
+    where fore = take i xs
+          aft = drop (i+1) xs
