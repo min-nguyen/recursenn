@@ -28,7 +28,7 @@ import Vector (Vector((:-)))
 import Debug.Trace
 import Data.List (transpose, elemIndex)
 import Data.Maybe (fromJust)
-import Control.Lens
+import Control.Lens hiding (Index)
 ---- |‾| -------------------------------------------------------------- |‾| ----
  --- | |                        Convolutional NN                        | | ---
   --- ‾------------------------------------------------------------------‾---
@@ -43,9 +43,9 @@ data CNNLayer k where
     deriving (Functor, Show)
 
 type Filter             = [[[Double]]]       
-
-type Image              = [[[(Int, Double)]]]
-type Image2D            = [[(Int, Double)]]     
+type Index              = (Int, Int)
+type Image2D            = [[(Index, Double)]] 
+type Image              = [Image2D]    
 type ImageStack         = [Image]
 type Stride             = Int
 type SpatialExtent      = Int
@@ -114,7 +114,7 @@ unflatten image spatialExtent stride =
 convolute2D_ind :: [[Double]] -> Image2D -> Stride -> Image2D
 convolute2D_ind filter image stride
     = let flat_image = flatten_ind image (length filter) stride
-      in  chunksOf (length filter) $ zip [0 ..] $ map (sum . (zipWith (*) (concat filter)) . (map snd)) flat_image
+      in  chunksOf (length filter) $ zip (zip [0 ..] [0 ..]) $ map (sum . (zipWith (*) (concat filter)) . (map snd)) flat_image
 
 -- verified
 convolute3D_ind :: Filter -> Image -> Stride -> Image
@@ -136,26 +136,33 @@ forward :: Filter -> Image -> Stride -> Image2D
 forward filter image stride 
     = let (m, n)             = convoluteDims (length $ head filter) image stride 
           bias  = 1.0
-      in  map ((zip [0 ..]) . (map (bias + ))) $ foldr eleaddm (fillMatrix m n 0.0) (map3 snd $ convolute3D_ind filter image stride)
+      in   map (( zip (zip [0 ..] [0 ..]) ) . (map (bias + ))) $ foldr eleaddm (fillMatrix m n 0.0) (map3 snd $ convolute3D_ind filter image stride)
 
 -- verified
 pool :: Stride -> SpatialExtent -> Image2D -> Image2D
 pool stride spatialExtent image = 
     let flat_image = flatten_ind image spatialExtent stride
         image_nums = map2 snd flat_image
+        (w, h)     = (length $ head image, length $ head $ head image)
+        (m, n)     = ((quot (w - spatialExtent) stride) + 1 , (quot (h - spatialExtent) stride) + 1 )
+        f (x:xs) i =    let max_x = (maximum x)
+                            ind = fromJust $ elemIndex max_x x
+                            (m', n')    = (quot ind (spatialExtent), ind `mod` spatialExtent)
+                            (row, col)  = (quot i n, (stride * i) `mod` n)
+                        in  (((row + m', col + n'), max_x):(f xs (i + 1)))
+        f [] i     = []
     in  chunksOf ((quot (length (head image) - spatialExtent) stride) + 1) $ 
-            map (\xs -> let x = (maximum xs)
-                        in  (fromJust $ elemIndex x xs, x) ) image_nums
+            f image_nums 0
 
 
--- not functional
-unpool :: Int -> Image2D -> [[Double]]
-unpool originalDims image = 
-    let zeros              = replicate originalDims 0.0
-        set'  ls (y:ys)    = let (index, value) = y 
-                             in  set' (replaceElement ls index 1.0) ys
+-- verified
+unpool :: (Int, Int) -> Image2D -> [[Double]]
+unpool (orig_w, orig_h) image = 
+    let zeros              = replicate orig_h $ replicate orig_w 0.0
+        set'  ls (y:ys)    = let ((m, n), value) = y 
+                             in  set' (replaceElement ls m (replaceElement (ls !! m) n 1.0)) ys
         set'  ls []        = ls
-    in  [ set' zeros row     | row <- image]
+    in  set' zeros (concat image)
 
 ---- |‾| -------------------------------------------------------------- |‾| ----
  --- | |                          Alg & Coalg                           | | ---
@@ -173,7 +180,7 @@ alg (PoolingLayer stride spatialExtent (innerLayer, forwardPass))
                     ((map (pool stride spatialExtent) (head imageStack)):imageStack)) . forwardPass)
 alg (ReluLayer (innerLayer, forwardPass))
         = (Fx (ReluLayer innerLayer), 
-                (\imageStacks -> ((map3 (\x -> (0, abs $ snd x)) (head imageStacks)):imageStacks) ) . forwardPass)
+                (\imageStacks -> ((map3 (\x -> ((0,0), abs $ snd x)) (head imageStacks)):imageStacks) ) . forwardPass)
 alg (InputLayer) 
         = (Fx InputLayer, id)
 alg (FullyConnectedLayer (innerLayer, forwardPass)) 
@@ -201,7 +208,7 @@ coalg (Fx (ConvolutionalLayer filters biases innerLayer), BackPropData imageStac
 coalg (Fx (PoolingLayer stride spatialExtent innerLayer), BackPropData imageStack outerDeltas outerFilters desiredOutput)
         =   let input           = head (tail imageStack)
                 output          = head imageStack
-                deltaX          = [[unpool (length $ head input2d) output2d | (input2d, output2d) <- zip input output  ]]
+                deltaX          = [[unpool (length $ head input2d, length $ head $ head input2d) output2d | (input2d, output2d) <- zip input output  ]]
             in  (PoolingLayer stride spatialExtent (innerLayer, BackPropData (tail imageStack) deltaX outerFilters desiredOutput) )
 coalg (Fx (ReluLayer innerLayer), BackPropData imageStack outerDeltas outerFilters desiredOutput)
         =   let input           = head (tail imageStack)
