@@ -99,8 +99,9 @@ coalgy (Fx InputLayer, backPropData)
 
 compDelta ::  Activation' -> Inputs -> Outputs -> BackPropData -> Deltas 
 compDelta derivActivation inputs outputs (BackPropData _ finalOutput desiredOutput outerDeltas outerWeights)   
-    = case outerDeltas of  [] -> elemul (map (\x -> x*(x-1)) outputs) (zipWith (-) outputs desiredOutput)
-                           _  -> elemul (mvmul (transpose outerWeights) outerDeltas) (map derivActivation inputs)
+    =   let z = map inverseSigmoid inputs
+        in  case outerDeltas of [] -> elemul (zipWith (-) outputs desiredOutput) (map derivActivation z)
+                                _  -> elemul (mvmul (transpose outerWeights) outerDeltas) (map derivActivation z)
 
 forward :: Weights -> Biases -> Activation -> ([Inputs] -> [Inputs]) -> ([Inputs] -> [Inputs])
 forward weights biases activate k 
@@ -110,7 +111,7 @@ backward :: Weights -> Biases -> Inputs  -> BackPropData -> (Weights, Biases)
 backward weights biases inputs (BackPropData {outerDeltas = updatedDeltas, ..} )
     = let learningRate = 0.2
           inputsDeltasWeights = map (zip3 inputs updatedDeltas) weights
-          updatedWeights = [[ w - learningRate*d*i  |  (i, w, d) <- idw_vec ] | idw_vec <- inputsDeltasWeights]                                                  
+          updatedWeights = [[ w - learningRate*d*i  |  (i, d, w) <- idw_vec ] | idw_vec <- inputsDeltasWeights]                                                  
           updatedBiases  = map (learningRate *) updatedDeltas
       in (updatedWeights, updatedBiases)
 

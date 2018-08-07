@@ -54,6 +54,9 @@ ella  algx algy = Fx . fmap (ella algx algy) . app
 sigmoid :: Double -> Double
 sigmoid lx = 1.0 / (1.0 + exp (negate lx))
 
+inverseSigmoid :: Double -> Double
+inverseSigmoid lx = -log((1.0 / lx) - 1.0)
+
 sigmoid' :: Double -> Double
 sigmoid' x = let sig = (sigmoid x) in sig * (1.0 - sig)
 

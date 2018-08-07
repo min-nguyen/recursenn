@@ -147,7 +147,7 @@ pool stride spatialExtent image =
         (m, n)     = ((quot (h - spatialExtent) stride) + 1 , (quot (w - spatialExtent) stride) + 1 )
         f (x:xs) i =    let max_x = (maximum x)
                             ind = fromJust $ elemIndex max_x x
-                            (m', n')    = (quot ind (spatialExtent), ind `mod` spatialExtent)
+                            (m', n')    = (quot ind spatialExtent, ind `mod` spatialExtent)
                             (row, col)  = (quot i n, (stride * i) `mod` n)
                         in  (((row + m', col + n'), max_x):(f xs (i + 1)))
         f [] i     = []
@@ -191,10 +191,10 @@ alg (FullyConnectedLayer (innerLayer, forwardPass))
 coalg :: (Fix CNNLayer, BackPropData) -> CNNLayer (Fix CNNLayer, BackPropData )
 coalg (Fx (FullyConnectedLayer innerLayer), BackPropData imageStack outerDeltas outerFilters desiredOutput)
         =   let actualOutput = (head imageStack)
-                deltas       = [ [ [map (0.5 *) (zipWith (-) a d)]  
+                deltaX       = [ [ [map (0.5 *) (zipWith (-) a d)]  
                                         |  (a, d) <- (zip (map2 snd actOutput2d) desOutput2d) ]    
                                             |  (actOutput2d, desOutput2d) <- (zip actualOutput desiredOutput)  ]
-            in  FullyConnectedLayer (Fx (FullyConnectedLayer innerLayer), BackPropData (tail imageStack) deltas outerFilters desiredOutput)
+            in  FullyConnectedLayer (Fx (FullyConnectedLayer innerLayer), BackPropData (tail imageStack) deltaX outerFilters desiredOutput)
 coalg (Fx (ConvolutionalLayer filters biases innerLayer), BackPropData imageStack outerDeltas outerFilters desiredOutput)
         =   let input           = head (tail imageStack)
                 learningRate    = 0.1
