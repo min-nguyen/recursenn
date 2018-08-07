@@ -143,15 +143,15 @@ pool :: Stride -> SpatialExtent -> Image2D -> Image2D
 pool stride spatialExtent image = 
     let flat_image = flatten_ind image spatialExtent stride
         image_nums = map2 snd flat_image
-        (w, h)     = (length $ head image, length $ head $ head image)
-        (m, n)     = ((quot (w - spatialExtent) stride) + 1 , (quot (h - spatialExtent) stride) + 1 )
+        (h, w)     = (length $ image, length $ head image)
+        (m, n)     = ((quot (h - spatialExtent) stride) + 1 , (quot (w - spatialExtent) stride) + 1 )
         f (x:xs) i =    let max_x = (maximum x)
                             ind = fromJust $ elemIndex max_x x
                             (m', n')    = (quot ind (spatialExtent), ind `mod` spatialExtent)
                             (row, col)  = (quot i n, (stride * i) `mod` n)
                         in  (((row + m', col + n'), max_x):(f xs (i + 1)))
         f [] i     = []
-    in  chunksOf ((quot (length (head image) - spatialExtent) stride) + 1) $ 
+    in  trace (show (m, n) )chunksOf ((quot (length (head image) - spatialExtent) stride) + 1) $ 
             f image_nums 0
 
 
@@ -208,7 +208,7 @@ coalg (Fx (ConvolutionalLayer filters biases innerLayer), BackPropData imageStac
 coalg (Fx (PoolingLayer stride spatialExtent innerLayer), BackPropData imageStack outerDeltas outerFilters desiredOutput)
         =   let input           = head (tail imageStack)
                 output          = head imageStack
-                deltaX          = [[unpool (length $ head input2d, length $ head $ head input2d) output2d | (input2d, output2d) <- zip input output  ]]
+                deltaX          = [[unpool (length $ head input2d, length $ input2d) output2d | (input2d, output2d) <- zip input output  ]]
             in  (PoolingLayer stride spatialExtent (innerLayer, BackPropData (tail imageStack) deltaX outerFilters desiredOutput) )
 coalg (Fx (ReluLayer innerLayer), BackPropData imageStack outerDeltas outerFilters desiredOutput)
         =   let input           = head (tail imageStack)
