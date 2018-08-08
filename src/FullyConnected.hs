@@ -112,7 +112,7 @@ backward weights biases inputs (BackPropData {outerDeltas = updatedDeltas, ..} )
     = let learningRate = 0.2
           inputsDeltasWeights = map (zip3 inputs updatedDeltas) weights
           updatedWeights = [[ w - learningRate*d*i  |  (i, d, w) <- idw_vec ] | idw_vec <- inputsDeltasWeights]                                                  
-          updatedBiases  = map (learningRate *) updatedDeltas
+          updatedBiases  = zipWith (-) biases (map (learningRate *) updatedDeltas)
       in (updatedWeights, updatedBiases)
 
 ---- |‾| -------------------------------------------------------------- |‾| ----
