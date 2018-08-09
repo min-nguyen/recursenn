@@ -73,6 +73,9 @@ zipWithPadding  f (x:xs) (y:ys) = (f x y) : zipWithPadding  f xs ys
 zipWithPadding  f []     ys     = ys
 zipWithPadding  f xs     []     = xs
 
+dot :: Fractional a => [a] -> [a] -> a
+dot v1 v2 = sum $ zipWith (*) v1 v2
+
 mvmul :: Num a => [[a]] -> [a] -> [a]
 mvmul mat vec = map (sum . (zipWith (*) vec)) mat
 
@@ -87,6 +90,13 @@ elemul v1 v2 = zipWith (*) v1 v2
 
 elemulm :: Fractional a => [[a]] -> [[a]] -> [[a]]
 elemulm m1 m2 =  [ zipWith (*) v1 v2 |  (v1, v2) <- (zip m1 m2) ]
+
+eleaddv :: Fractional a => [a] -> [a] -> [a]
+eleaddv v1 v2 =   zipWith (+) v1 v2 
+
+eleaddv3 :: Fractional a => [a] -> [a] -> [a] -> [a]
+eleaddv3 v1 v2 v3 =   eleaddv (eleaddv v1 v2) v3
+
 
 eleaddm :: Fractional a => [[a]] -> [[a]] -> [[a]]
 eleaddm m1 m2 =  [ zipWith (+) v1 v2 |  (v1, v2) <- (zip m1 m2) ]

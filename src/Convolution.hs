@@ -97,19 +97,6 @@ flatten image spatialExtent stride =
                                                  in  splitHorizontal image'' (map (drop stride) imageChunk) new_stack
     in chunksOf (spatialExtent*spatialExtent) (splitVertical image [])
 
-unflatten :: [[Double]] -> SpatialExtent -> Stride -> [[Double]]
-unflatten image spatialExtent stride =
-    let splitVertical image' stackArray =   
-                                if length image' < spatialExtent 
-                                then stackArray
-                                else (splitHorizontal image' (take spatialExtent image') stackArray)
-        splitHorizontal image'' imageChunk stack' = case () of 
-                                _ | length (head imageChunk) < spatialExtent -> (splitVertical (drop stride image'') stack')
-                                _ | otherwise -> let new_stack = (stack' ++ (concat $ map (take spatialExtent) $ take spatialExtent imageChunk))
-                                                 in  splitHorizontal image'' (map (drop stride) imageChunk) new_stack
-    in chunksOf (spatialExtent*spatialExtent) (splitVertical image [])
-
-
 -- verified   
 convolute2D_ind :: [[Double]] -> Image2D -> Stride -> Image2D
 convolute2D_ind filter image stride
