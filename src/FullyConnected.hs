@@ -43,8 +43,7 @@ instance Functor (Layer) where
     fmap eval (InputLayer )                          = InputLayer 
 
 data BackPropData       = BackPropData  { 
-                                         inputStack     :: [Inputs], 
-                                         finalOutput    :: FinalOutput, 
+                                         inputStack     :: [Inputs],
                                          desiredOutput  :: DesiredOutput, 
                                          outerDeltas    :: Deltas, 
                                          outerWeights   :: Weights
@@ -98,7 +97,7 @@ coalgy (Fx InputLayer, backPropData)
   --- ‾------------------------------------------------------------------‾---
 
 compDelta ::  Activation' -> Inputs -> Outputs -> BackPropData -> Deltas 
-compDelta derivActivation inputs outputs (BackPropData _ finalOutput desiredOutput outerDeltas outerWeights)   
+compDelta derivActivation inputs outputs (BackPropData _  desiredOutput outerDeltas outerWeights)   
     =   let z = map inverseSigmoid inputs
         in  case outerDeltas of [] -> elemul (zipWith (-) outputs desiredOutput) (map derivActivation z)
                                 _  -> elemul (mvmul (transpose outerWeights) outerDeltas) (map derivActivation z)
@@ -122,7 +121,7 @@ backward weights biases inputs (BackPropData {outerDeltas = updatedDeltas, ..} )
 train :: Fix Layer -> LossFunction -> Inputs -> DesiredOutput -> Fix Layer 
 train neuralnet lossfunction sample desiredoutput 
     = trace (show $ head inputStack) $ 
-        ella coalgx coalgy $ (nn, BackPropData inputStack (head inputStack) desiredoutput [] [[]] )
+        ella coalgx coalgy $ (nn, BackPropData inputStack desiredoutput [] [[]] )
             where 
                 (nn, diff_fun)      = doggo algx algy neuralnet
                 inputStack   = diff_fun [sample]
