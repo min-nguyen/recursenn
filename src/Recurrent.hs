@@ -28,22 +28,43 @@ import Vector (Vector((:-)))
 import Debug.Trace
 
 type State      = [Double]
-type Inputs     = ([Double], [Double])
+type Inputs     = ([[Double]], [[Double]])
+
+
+data ForwardProp = ForwardProp {
+                        fF    :: [Double],
+                        iF    :: [Double],
+                        oF    :: [Double],
+                        cF    :: [Double]
+                    }
+                    
+data BackProp   = BackProp {
+                        dh_next     :: [Double],
+                        dc_next     :: [Double],
+                        nextForget  :: [Double],
+                        prevState   :: [Double],
+                        outputStack :: [[Double]]
+                    }
 
 data Weights    = Weights {
-                        forgetW :: [[Double]],
-                        inputW  :: [[Double]],
-                        outputW :: [[Double]],
-                        stateW  :: [[Double]]
+                        fW  :: [[Double]],
+                        iW  :: [[Double]],
+                        cW  :: [[Double]],
+                        oW  :: [[Double]],
+                        yW  :: [[Double]]
                     }
+
 data Biases     = Biases{
-                        forgetB :: [Double],
-                        inputB  :: [Double],
-                        outputB :: [Double],
-                        stateB  :: [Double]
-                    }
-data Cell  k = Cell {   uWeights    :: Weights,
-                        wWeights    :: Weights,
+                        fB    :: [Double],
+                        iB    :: [Double],
+                        cB    :: [Double],
+                        oB    :: [Double],
+                        yB    :: [Double]
+                    }   
+
+data Cell  k = Cell {   
+                        weights     :: Weights,
+                        forwardProp :: ForwardProp,
                         biases      :: Biases,
                         state       :: State,
                         k           :: k
@@ -51,12 +72,22 @@ data Cell  k = Cell {   uWeights    :: Weights,
                | InputCell 
 
 
-
 alg ::  Cell (Fix Cell, Inputs) -> (Fix Cell, Inputs)
-alg (Cell uWeights wWeights biases state (innerCell, (x, h)))
-    = let f = map sigmoid $ eleaddv3 (mvmul (forgetW wWeights) x)   (mvmul (forgetW uWeights) h)  (forgetB biases)
-          i = map sigmoid $ eleaddv3 (mvmul (inputW wWeights)  x)   (mvmul (inputW uWeights)  h)  (inputB biases)
-          o = map sigmoid $ eleaddv3 (mvmul (outputW wWeights) x)   (mvmul (outputW uWeights) h)  (outputB biases)
-          c = eleaddv (elemul f state)  (elemul i (map sigmoid $ eleaddv3 (mvmul (stateW wWeights) x) (mvmul (stateW uWeights) h) (stateB biases) ))
-          ht = elemul o (map sigmoid c)
-      in (Fx (Cell uWeights wWeights biases c innerCell), (x,ht))
+alg (Cell weights forwardProp biases state (innerCell, (xs, hs)))
+    = let (x, h) = (head xs, head hs)
+          hx = zipWith (\h0 x0 -> (h0:x0:[])) h x
+          hf = map sigmoid $ eleadd  (mvmul (fW weights) x)  (fB biases)
+          hi = map sigmoid $ eleadd  (mvmul (iW weights) x)  (iB biases)
+          ho = map sigmoid $ eleadd  (mvmul (oW weights) x)  (oB biases)
+          hc = map sigmoid $ eleadd  (mvmul (cW weights) x)  (cB biases)
+          c  = eleadd (elemul hf state) (elemul hi hc)
+          h' = elemul ho (map tanh c)
+          y = eleadd (mvmul (yW weights) h' ) (yB biases)
+          prob = softmax y
+          forwardProp' = ForwardProp hf hi ho hc
+      in (Fx (Cell weights forwardProp' biases c innerCell), ((tail xs) ++ [x], (h':hs) ))
+
+coalg :: (Fix Cell, BackProp) -> Cell (Fix Cell, BackProp)  
+coalg (Fx (Cell weights forwardProp biases state innerCell), 
+            BackProp dh_next dc_next nextForget prevState outputStack)
+    = let ForwardProp hf hi ho hc = forwardProp

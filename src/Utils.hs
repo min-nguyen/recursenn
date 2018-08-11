@@ -60,6 +60,10 @@ inverseSigmoid lx = -log((1.0 / lx) - 1.0)
 sigmoid' :: Double -> Double
 sigmoid' x = let sig = (sigmoid x) in sig * (1.0 - sig)
 
+softmax :: [Double] -> [Double]
+softmax z = let denom = sum [exp (zk) | zk <- z]
+            in  map (\zj -> (exp zj) / denom) z
+
 loss :: Fractional a => [a] -> [a] -> a
 loss output desired_output 
     = (1/(fromIntegral $ length output)) * (sum $ map ((\x -> x*x) . (abs)) (zipWith (-) output desired_output))
@@ -76,6 +80,9 @@ zipWithPadding  f xs     []     = xs
 dot :: Fractional a => [a] -> [a] -> a
 dot v1 v2 = sum $ zipWith (*) v1 v2
 
+dotv :: Fractional a => [a] -> [a] -> [a]
+dotv v1 v2 = mvmul (map (\x -> [x]) v1) v2
+
 mvmul :: Num a => [[a]] -> [a] -> [a]
 mvmul mat vec = map (sum . (zipWith (*) vec)) mat
 
@@ -88,15 +95,23 @@ mmmul3 m1 m2 m3 = mmmul (mmmul m1 m2) m3
 elemul :: Fractional a => [a] -> [a] -> [a]
 elemul v1 v2 = zipWith (*) v1 v2
 
+elemul3 :: Fractional a => [a] -> [a] -> [a] -> [a]
+elemul3 v1 v2 v3 = elemul v1 (elemul v2 v3)
+
+elemul4 :: Fractional a => [a] -> [a] -> [a] -> [a]  -> [a]
+elemul4 v1 v2 v3 v4 = elemul v1 (elemul3 v2 v3 v4)
+
 elemulm :: Fractional a => [[a]] -> [[a]] -> [[a]]
 elemulm m1 m2 =  [ zipWith (*) v1 v2 |  (v1, v2) <- (zip m1 m2) ]
 
-eleaddv :: Fractional a => [a] -> [a] -> [a]
-eleaddv v1 v2 =   zipWith (+) v1 v2 
+eleadd :: Fractional a => [a] -> [a] -> [a]
+eleadd v1 v2 =   zipWith (+) v1 v2 
 
-eleaddv3 :: Fractional a => [a] -> [a] -> [a] -> [a]
-eleaddv3 v1 v2 v3 =   eleaddv (eleaddv v1 v2) v3
+eleadd3 :: Fractional a => [a] -> [a] -> [a] -> [a]
+eleadd3 v1 v2 v3 =   eleadd (eleadd v1 v2) v3
 
+elesub :: Fractional a => [a] -> [a] -> [a]
+elesub v1 v2 =   zipWith (-) v1 v2 
 
 eleaddm :: Fractional a => [[a]] -> [[a]] -> [[a]]
 eleaddm m1 m2 =  [ zipWith (+) v1 v2 |  (v1, v2) <- (zip m1 m2) ]
@@ -121,3 +136,9 @@ replaceElement xs i x =
     fore ++ (x : aft)
     where fore = take i xs
           aft = drop (i+1) xs
+
+sqr :: Fractional a => a -> a
+sqr x = x * x
+
+sub1 :: Fractional a => a -> a
+sub1 x = 1.0 - x
