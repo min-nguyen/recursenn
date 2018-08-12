@@ -110,6 +110,9 @@ elemulm m1 m2 =  [ zipWith (*) v1 v2 |  (v1, v2) <- (zip m1 m2) ]
 eleadd :: Fractional a => [a] -> [a] -> [a]
 eleadd v1 v2 =   zipWith (+) v1 v2 
 
+eleaddM :: Fractional a => [[a]] -> [[a]] -> [[a]]
+eleaddM m1 m2 = [ eleadd v1 v2 | (v1, v2) <- (zip m1 m2)]
+
 eleadd3 :: Fractional a => [a] -> [a] -> [a] -> [a]
 eleadd3 v1 v2 v3 =   eleadd (eleadd v1 v2) v3
 
@@ -121,6 +124,9 @@ eleaddm m1 m2 =  [ zipWith (+) v1 v2 |  (v1, v2) <- (zip m1 m2) ]
 
 elesubm :: Fractional a => [[a]] -> [[a]] -> [[a]]
 elesubm m1 m2 =  [ zipWith (-) v1 v2 |  (v1, v2) <- (zip m1 m2) ]
+
+elesub3 :: Fractional a => [[[a]]] -> [[[a]]] -> [[[a]]]
+elesub3 m1 m2 =  [ elesubm v1 v2 |  (v1, v2) <- (zip m1 m2) ]
 
 fillMatrix :: Fractional a => Int -> Int -> a -> [[a]]
 fillMatrix m n a = replicate m $ replicate n a
@@ -145,3 +151,6 @@ sqr x = x * x
 
 sub1 :: Fractional a => a -> a
 sub1 x = 1.0 - x
+
+cons :: a -> [a]
+cons x = [x]

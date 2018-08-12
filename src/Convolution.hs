@@ -34,12 +34,12 @@ import Control.Lens hiding (Index)
   --- ‾------------------------------------------------------------------‾---
 
 
-data CNNLayer k where
-    InputLayer              :: CNNLayer k
-    ConvolutionalLayer      :: [Filter] -> [Biases] -> k -> CNNLayer k
-    ReluLayer               :: k -> CNNLayer k 
-    PoolingLayer            :: Stride -> SpatialExtent -> k -> CNNLayer k 
-    FullyConnectedLayer     :: k -> CNNLayer k
+data Layer k where
+    InputLayer              :: Layer k
+    ConvolutionalLayer      :: [Filter] -> [Biases] -> k -> Layer k
+    ReluLayer               :: k -> Layer k 
+    PoolingLayer            :: Stride -> SpatialExtent -> k -> Layer k 
+    FullyConnectedLayer     :: k -> Layer k
     deriving (Functor, Show)
 
 type Filter             = [[[Double]]]       
@@ -64,7 +64,7 @@ data BackPropData       = BackPropData {
  --- | |                          Alg & Coalg                           | | ---
   --- ‾------------------------------------------------------------------‾---
 
-alg :: CNNLayer (Fix CNNLayer, (ImageStack -> ImageStack) ) -> (Fix CNNLayer, (ImageStack -> ImageStack))
+alg :: Layer (Fix Layer, (ImageStack -> ImageStack) ) -> (Fix Layer, (ImageStack -> ImageStack))
 alg (ConvolutionalLayer filters biases (innerLayer, forwardPass))
         = (Fx (ConvolutionalLayer filters biases innerLayer), (\imageStacks -> 
             let inputVolume = (head imageStacks) 
@@ -83,7 +83,7 @@ alg (FullyConnectedLayer (innerLayer, forwardPass))
         = (Fx (FullyConnectedLayer innerLayer), id)
 
 
-coalg :: (Fix CNNLayer, BackPropData) -> CNNLayer (Fix CNNLayer, BackPropData )
+coalg :: (Fix Layer, BackPropData) -> Layer (Fix Layer, BackPropData )
 coalg (Fx (FullyConnectedLayer innerLayer), BackPropData imageStack outerDeltas outerFilters desiredOutput)
         =   let actualOutput = (head imageStack)
                 delta       = [ [ [map (0.5 *) (zipWith (-) a d)]  
@@ -116,7 +116,7 @@ coalg  (Fx InputLayer, backPropData)
         =   InputLayer
 
 
-train :: Fix CNNLayer -> Image -> DesiredOutput -> Fix CNNLayer 
+train :: Fix Layer -> Image -> DesiredOutput -> Fix Layer 
 train neuralnet sample desiredoutput 
     = trace (show $ head inputStack) $ 
         ana coalg $ (nn, BackPropData inputStack [[[[]]]] [[[[]]]] desiredoutput)
