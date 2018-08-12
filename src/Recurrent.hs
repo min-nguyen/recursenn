@@ -37,7 +37,7 @@ data ForwardProp = ForwardProp {
                         oF    :: [Double],
                         cF    :: [Double]
                     }
-                    
+
 data BackProp   = BackProp {
                         dh_next     :: [Double],
                         dc_next     :: [Double],
@@ -72,7 +72,7 @@ data Cell  k = Cell {
                | InputCell 
 
 
-alg ::  Cell (Fix Cell, Inputs) -> (Fix Cell, Inputs)
+alg ::  Cell (Fix Cell, Inputs) -> (Fix Cell, Inputs) -- use forwardprop storing inputs, instead of Inputs?
 alg (Cell weights forwardProp biases state (innerCell, (xs, hs)))
     = let (x, h) = (head xs, head hs)
           hx = zipWith (\h0 x0 -> (h0:x0:[])) h x
@@ -87,7 +87,7 @@ alg (Cell weights forwardProp biases state (innerCell, (xs, hs)))
           forwardProp' = ForwardProp hf hi ho hc
       in (Fx (Cell weights forwardProp' biases c innerCell), ((tail xs) ++ [x], (h':hs) ))
 
-coalg :: (Fix Cell, BackProp) -> Cell (Fix Cell, BackProp)  
-coalg (Fx (Cell weights forwardProp biases state innerCell), 
-            BackProp dh_next dc_next nextForget prevState outputStack)
-    = let ForwardProp hf hi ho hc = forwardProp
+-- coalg :: (Fix Cell, BackProp) -> Cell (Fix Cell, BackProp)  
+-- coalg (Fx (Cell weights forwardProp biases state innerCell), 
+--             BackProp dh_next dc_next nextForget prevState outputStack)
+--     = let ForwardProp hf hi ho hc = forwardProp
