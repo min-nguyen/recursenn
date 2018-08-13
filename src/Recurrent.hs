@@ -42,11 +42,11 @@ data ForwardProp = ForwardProp {
                         iF          :: [Double],
                         oF          :: [Double],
                         aF          :: [Double],
-                        state       :: [Double],
                         x           :: [Double],
                         h           :: [Double],
-                        output      :: [Double],
                         label       :: Label,
+                        output      :: [Double],
+                        state       :: [Double],
                         parameters  :: HyperParameters,
                         inputStack  :: Inputs
                     }
@@ -74,23 +74,30 @@ data Biases     = Biases{
                         oB    :: [Double]
                     }   
 
-data Layer   =  Layer {
+data Layer k =  Layer {
                         weights_W   :: Weights,
                         weights_U   :: Weights,
                         bias        :: Biases,
-                        cells       :: Fix Cell
+                        cells       :: Fix Cell,
+                        innerLayer  :: k
                     }
+                | InputLayer deriving Functor
                 
-data Cell  k = Cell {   
+data Cell  k =  Cell {   
                         cellState   :: State,
-                        k           :: k
+                        innerCell   :: k
                     }
-               | InputCell 
+                | InputCell  deriving Functor
 
 
--- run :: Layer -> Layer
--- run (Layer weights_W weights_U bias cells) 
---     = let (cells', inputs', forwardPropFunc) = cata alg cells
+run :: Layer k -> ForwardProp -> BackProp -> Layer k
+run (Layer weights_W weights_U bias cells innerLayer) initialForwardProp initialBackProp
+    = let (cells', forwardPropFunc) = cata alg cells
+          forwardProp               = forwardPropFunc [initialForwardProp]
+          cells''                   = ana coalg (cells', forwardProp, id)
+          (_, _, backPropFunc)      = cata alg2 cells''
+          backProp                  = backPropFunc initialBackProp
+      in updateParameters (Layer weights_W weights_U bias cells innerLayer) backProp
 
 alg ::  Cell (Fix Cell, [ForwardProp] -> [ForwardProp]) -> (Fix Cell, [ForwardProp] -> [ForwardProp]) -- use forwardprop storing inputs, instead of Inputs?
 alg (Cell state (innerCell, forwardProps)) 
@@ -113,9 +120,9 @@ alg InputCell =
     (Fx InputCell, id)
 
 coalg :: (Fix Cell, [ForwardProp], BackProp -> BackProp) -> Cell (Fix Cell, [ForwardProp], BackProp -> BackProp)  
-coalg (Fx (Cell state innerCell), forwardProps, backProp)
-    = let ForwardProp f i o a state' x h output label hyperparameters _ = head forwardProps
-          ForwardProp {state = prevState}                               = head (tail forwardProps)
+coalg (Fx (Cell state innerCell), forwardProps, _)
+    = let ForwardProp f i o a x h label output updatedState hyperparameters _ = head forwardProps
+          ForwardProp {state = prevState}                                     = head (tail forwardProps)
           (weights_w, weights_u, biases) = hyperparameters
           backProp' = (\bp -> 
                     let BackProp dState_next deltaOut_next f_next deltaW_next deltaU_next deltaB_next = bp
@@ -140,7 +147,7 @@ coalg (Fx (Cell state innerCell), forwardProps, backProp)
                         deltaB     = deltaGates
 
                     in  BackProp dState deltaOut f deltaW deltaU deltaB)
-      in  Cell state' (innerCell, tail forwardProps, backProp' )
+      in  Cell updatedState (innerCell, tail forwardProps, backProp' )
 coalg (Fx InputCell, forwardProps, backProp)
     = InputCell
 
@@ -159,8 +166,8 @@ alg2 InputCell
 
 
 
-updateParameters ::  Layer  -> BackProp -> Layer 
-updateParameters (Layer weights_w weights_u biases cells) backProp
+updateParameters ::  Layer k -> BackProp -> Layer k
+updateParameters (Layer weights_w weights_u biases cells innerLayer) backProp
     =   let (deltaW_total, deltaU_total, deltaB_total) = (deltaW backProp, deltaU backProp, deltaB backProp)
             [dfW, diW, daW, doW] = deltaW_total
             [dfU, diU, daU, doU] = deltaU_total
@@ -177,7 +184,7 @@ updateParameters (Layer weights_w weights_u biases cells) backProp
             weights_w'  = Weights fW' iW' aW' oW'
             weights_u'  = Weights fU' iU' aU' oU'
             biases'     = Biases  fB' iB' aB' oB'
-        in  (Layer weights_w' weights_u' biases' cells)
+        in  (Layer weights_w' weights_u' biases' cells innerLayer)
 
 
 -- train :: Fix Cell -> LossFunction -> Inputs -> DesiredOutput -> Fix Cell 
