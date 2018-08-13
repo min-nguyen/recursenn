@@ -97,7 +97,7 @@ run (Layer weights_W weights_U bias cells innerLayer) initialForwardProp initial
           cells''                   = ana coalg (cells', forwardProp, id)
           (_, _, backPropFunc)      = cata alg2 cells''
           backProp                  = backPropFunc initialBackProp
-      in updateParameters (Layer weights_W weights_U bias cells innerLayer) backProp
+      in updateParameters (Layer weights_W weights_U bias cells'' innerLayer) backProp
 
 alg ::  Cell (Fix Cell, [ForwardProp] -> [ForwardProp]) -> (Fix Cell, [ForwardProp] -> [ForwardProp]) -- use forwardprop storing inputs, instead of Inputs?
 alg (Cell state (innerCell, forwardProps)) 
