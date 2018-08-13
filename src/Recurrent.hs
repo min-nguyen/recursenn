@@ -30,10 +30,9 @@ import Debug.Trace
 
 type State      = [Double]
 type X          = [Double]
-type H          = [Double]
 type Label      = [Double]
 type Inputs     = [(X, Label)]
--- type Delta      = 
+
 
 type HyperParameters = (Weights, Weights, Biases)
 
@@ -54,10 +53,10 @@ data ForwardProp = ForwardProp {
 data BackProp   = BackProp {
                         deltaState_next :: [Double],
                         deltaOut_next   :: [Double],   
-                        forget_next     :: [Double],
                         deltaW          :: [[Double]],
                         deltaU          :: [[Double]],
-                        deltaB          :: [Double]
+                        deltaB          :: [Double],
+                        forget_next     :: [Double]
                     }
 
 data Weights    = Weights {
@@ -90,17 +89,20 @@ data Cell  k =  Cell {
                 | InputCell  deriving Functor
 
 
+
+
+
 run :: Layer k -> ForwardProp -> BackProp -> Layer k
 run (Layer weights_W weights_U bias cells innerLayer) initialForwardProp initialBackProp
-    = let (cells', forwardPropFunc) = cata alg cells
+    = let (cells', forwardPropFunc) = cata alg_cell cells
           forwardProp               = forwardPropFunc [initialForwardProp]
-          cells''                   = ana coalg (cells', forwardProp, id)
-          (_, _, backPropFunc)      = cata alg2 cells''
+          cells''                   = ana coalg_cell (cells', forwardProp, id)
+          (_, _, backPropFunc)      = cata alg2_cell cells''
           backProp                  = backPropFunc initialBackProp
       in updateParameters (Layer weights_W weights_U bias cells'' innerLayer) backProp
 
-alg ::  Cell (Fix Cell, [ForwardProp] -> [ForwardProp]) -> (Fix Cell, [ForwardProp] -> [ForwardProp]) -- use forwardprop storing inputs, instead of Inputs?
-alg (Cell state (innerCell, forwardProps)) 
+alg_cell ::  Cell (Fix Cell, [ForwardProp] -> [ForwardProp]) -> (Fix Cell, [ForwardProp] -> [ForwardProp]) -- use forwardprop storing inputs, instead of Inputs?
+alg_cell (Cell state (innerCell, forwardProps)) 
     = let forwardProps' = (\fps -> 
                 let ForwardProp {parameters = parameters, 
                                  output = h, 
@@ -116,19 +118,21 @@ alg (Cell state (innerCell, forwardProps))
                     output' = elemul o (map tanh state')
                 in  ((ForwardProp f i o a state' x h output' label parameters (tail inputStack)):fps)) . forwardProps
       in  (Fx (Cell state innerCell), forwardProps')
-alg InputCell = 
+alg_cell InputCell = 
     (Fx InputCell, id)
 
-coalg :: (Fix Cell, [ForwardProp], BackProp -> BackProp) -> Cell (Fix Cell, [ForwardProp], BackProp -> BackProp)  
-coalg (Fx (Cell state innerCell), forwardProps, _)
+coalg_cell :: (Fix Cell, [ForwardProp], BackProp -> BackProp) -> Cell (Fix Cell, [ForwardProp], BackProp -> BackProp)  
+coalg_cell (Fx (Cell state innerCell), forwardProps, _)
     = let ForwardProp f i o a x h label output updatedState hyperparameters _ = head forwardProps
           ForwardProp {state = prevState}                                     = head (tail forwardProps)
           (weights_w, weights_u, biases) = hyperparameters
           backProp' = (\bp -> 
-                    let BackProp dState_next deltaOut_next f_next deltaW_next deltaU_next deltaB_next = bp
+                    let BackProp dState_next deltaOut_next deltaW_next deltaU_next deltaB_next f_next = bp
 
                         Weights fW iW aW oW   = weights_w
                         Weights fU iU aU oU   = weights_u
+                        weightsW   = aW  ++ iW  ++ fW  ++ oW
+                        weightsU   = aU  ++ iU  ++ fU  ++ oU
                         deltaError = elesub output label
                         dOut       = eleadd deltaError deltaOut_next
                         dState     = eleadd (elemul3 dOut o (map (sub1 . sqr . tanh) state)) (elemul dState_next f_next)
@@ -137,8 +141,6 @@ coalg (Fx (Cell state innerCell), forwardProps, _)
                         d_f        = elemul4 dState prevState f (map sub1 f)
                         d_o        = elemul4 dOut (map tanh state) o (map sub1 o)
                         deltaGates = d_a ++ d_i ++ d_f ++ d_o
-                        weightsW   = aW  ++ iW  ++ fW  ++ oW
-                        weightsU   = aU  ++ iU  ++ fU  ++ oU
                         deltaX     = mvmul (transpose weightsW) deltaGates  -- not used at the moment
                         deltaOut   = mvmul (transpose weightsU) deltaGates
 
@@ -146,13 +148,49 @@ coalg (Fx (Cell state innerCell), forwardProps, _)
                         deltaU     = mmmul (map cons deltaGates) (cons output) 
                         deltaB     = deltaGates
 
-                    in  BackProp dState deltaOut f deltaW deltaU deltaB)
+                    in  BackProp dState deltaOut deltaW deltaU deltaB f )
       in  Cell updatedState (innerCell, tail forwardProps, backProp' )
-coalg (Fx InputCell, forwardProps, backProp)
-    = InputCell
 
-alg2 ::  Cell (Fix Cell, [ForwardProp],  BackProp -> BackProp) -> (Fix Cell, [ForwardProp],  BackProp -> BackProp)
-alg2 (Cell state (innerCell, forwardProps, backProp)) 
+-- coalg_cell (Fx (Cell state innerCell), forwardProps, _)
+--     = let ForwardProp f i o a x h label output updatedState hyperparameters _ = head forwardProps
+--           ForwardProp {state = prevState}                                     = head (tail forwardProps)
+--           (weights_w, weights_u, biases) = hyperparameters
+--           backProp' = (\bp -> 
+--                     let BackProp dState_next deltaOut_next 
+--                                  deltaW_next deltaU_next deltaB_next f_next
+--                                  nextLayerDeltas nextLayerWeightsW = bp
+
+--                         Weights fW iW aW oW   = weights_w
+--                         Weights fU iU aU oU   = weights_u
+--                         weightsW   = aW  ++ iW  ++ fW  ++ oW
+--                         weightsU   = aU  ++ iU  ++ fU  ++ oU
+
+--                         nextLayerDelta = head nextLayerDeltas
+--                         deltaError = elemul (mvmul (transpose nextLayerWeightsW) nextLayerDelta) x
+
+--                         dOut       = eleadd deltaError deltaOut_next
+--                         dState     = eleadd (elemul3 dOut o (map (sub1 . sqr . tanh) state)) (elemul dState_next f_next)
+                        
+--                         d_a        = elemul3 dState i (map (sub1 . sqr) a)
+--                         d_i        = elemul4 dState a i (map sub1 i)
+--                         d_f        = elemul4 dState prevState f (map sub1 f)
+--                         d_o        = elemul4 dOut (map tanh state) o (map sub1 o)
+--                         deltaGates = d_a ++ d_i ++ d_f ++ d_o
+                        
+--                         deltaX     = mvmul (transpose weightsW) deltaGates  -- not used at the moment
+--                         deltaOut   = mvmul (transpose weightsU) deltaGates
+
+--                         deltaW     = mmmul (map cons deltaGates) (cons x) 
+--                         deltaU     = mmmul (map cons deltaGates) (cons output) 
+--                         deltaB     = deltaGates
+
+--                     in  BackProp dState deltaOut f deltaW deltaU deltaB (tail nextLayerDeltas) nextLayerWeightsW)
+--       in  Cell updatedState (innerCell, tail forwardProps, backProp' )
+-- coalg (Fx InputCell, forwardProps, backProp)
+--     = InputCell
+
+alg2_cell ::  Cell (Fix Cell, [ForwardProp],  BackProp -> BackProp) -> (Fix Cell, [ForwardProp],  BackProp -> BackProp)
+alg2_cell (Cell state (innerCell, forwardProps, backProp)) 
     =   let backProp' = \bp -> 
                 let BackProp {deltaW = deltaW1, deltaU = deltaU1, deltaB = deltaB1} = bp
                     BackProp {deltaW = deltaW2, deltaU = deltaU2, deltaB = deltaB2} = backProp bp
