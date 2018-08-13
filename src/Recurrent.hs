@@ -48,30 +48,34 @@ data ForwardProp = ForwardProp {
                         state       :: [Double],
                         parameters  :: HyperParameters,
                         inputStack  :: Inputs
-                    }
+                    } deriving Show
 
 data BackProp   = BackProp {
-                        deltaState_next :: [Double],
-                        deltaOut_next   :: [Double],   
-                        deltaW          :: [[Double]],
-                        deltaU          :: [[Double]],
-                        deltaB          :: [Double],
-                        forget_next     :: [Double]
-                    }
+                        deltaState_next  :: [Double],
+                        deltaOut_next    :: [Double],   
+                        deltaW           :: [[Double]],
+                        deltaU           :: [[Double]],
+                        deltaB           :: [Double],
+                        forget_next      :: [Double],
+                        nextLayerDeltas  :: [[Double]],
+                        nextLayerWeights :: Weights
+                    } deriving Show
+
 
 data Weights    = Weights {
                         fW  :: [[Double]],
                         iW  :: [[Double]],
                         aW  :: [[Double]],
                         oW  :: [[Double]]
-                    }
+                    } | NoWeights deriving Show
+
 
 data Biases     = Biases{
                         fB    :: [Double],
                         iB    :: [Double],
                         aB    :: [Double],
                         oB    :: [Double]
-                    }   
+                    }   deriving Show
 
 data Layer k =  Layer {
                         weights_W   :: Weights,
@@ -80,21 +84,28 @@ data Layer k =  Layer {
                         cells       :: Fix Cell,
                         innerLayer  :: k
                     }
-                | InputLayer deriving Functor
+                | InputLayer deriving (Functor, Show)
                 
 data Cell  k =  Cell {   
                         cellState   :: State,
                         innerCell   :: k
                     }
-                | InputCell  deriving Functor
+                | InputCell  deriving (Functor, Show)
 
 
+runs :: Layer k -> [ForwardProp]
+runs (Layer weights_W weights_U bias cells innerLayer) 
+    = let initialForwardProp = ForwardProp [] [] [] [] [] [] [] [] [0] (weights_W, weights_U, bias) [([1,2],[0.5]),([0.5,3], [1.25])]
+          initialBackProp    = BackProp [0] [0] [[]] [[]] [] [] [[]] NoWeights
+          (cells', forwardPropFunc) = cata alg_cell cells
+          forwardProp               = forwardPropFunc [initialForwardProp]
+      in forwardProp
 
-
-
-run :: Layer k -> ForwardProp -> BackProp -> Layer k
-run (Layer weights_W weights_U bias cells innerLayer) initialForwardProp initialBackProp
-    = let (cells', forwardPropFunc) = cata alg_cell cells
+run :: Layer k -> Layer k
+run (Layer weights_W weights_U bias cells innerLayer) 
+    = let initialForwardProp = ForwardProp [] [] [] [] [] [] [] [] [0] (weights_W, weights_U, bias) [([1,2],[0.5]),([0.5,3], [1.25])]
+          initialBackProp    = BackProp [0] [0] [[]] [[]] [] [] [[]] NoWeights
+          (cells', forwardPropFunc) = cata alg_cell cells
           forwardProp               = forwardPropFunc [initialForwardProp]
           cells''                   = ana coalg_cell (cells', forwardProp, id)
           (_, _, backPropFunc)      = cata alg2_cell cells''
@@ -110,7 +121,7 @@ alg_cell (Cell state (innerCell, forwardProps))
                                  inputStack = inputStack} = head fps
                     (weights_w, weights_u, biases) = parameters
                     (x, label) = head inputStack
-                    f = map sigmoid $ eleadd3  (mvmul (fW weights_w) x) (mvmul (fW weights_u) h) (fB biases)
+                    f = map tanh    $ eleadd3  (mvmul (fW weights_w) x) (mvmul (fW weights_u) h) (fB biases)
                     i = map sigmoid $ eleadd3  (mvmul (iW weights_w) x) (mvmul (iW weights_u) h) (iB biases)
                     o = map sigmoid $ eleadd3  (mvmul (oW weights_w) x) (mvmul (oW weights_u) h) (oB biases)
                     a = map sigmoid $ eleadd3  (mvmul (aW weights_w) x) (mvmul (aW weights_u) h) (aB biases)
@@ -124,22 +135,27 @@ alg_cell InputCell =
 coalg_cell :: (Fix Cell, [ForwardProp], BackProp -> BackProp) -> Cell (Fix Cell, [ForwardProp], BackProp -> BackProp)  
 coalg_cell (Fx (Cell state innerCell), forwardProps, _)
     = let ForwardProp f i o a x h label output updatedState hyperparameters _ = head forwardProps
-          ForwardProp {state = prevState}                                     = head (tail forwardProps)
+          ForwardProp {state = prevState}                                     = head (tail (forwardProps ++ []))
           (weights_w, weights_u, biases) = hyperparameters
           backProp' = (\bp -> 
-                    let BackProp dState_next deltaOut_next deltaW_next deltaU_next deltaB_next f_next = bp
+                    let BackProp dState_next deltaOut_next 
+                                 deltaW_next deltaU_next deltaB_next f_next 
+                                 nextLayerDeltas nextLayerWeightsW = bp
 
-                        Weights fW iW aW oW   = weights_w
-                        Weights fU iU aU oU   = weights_u
+                        Weights aW  iW fW  oW   = weights_w
+                        Weights aU  iU fU  oU   = weights_u
                         weightsW   = aW  ++ iW  ++ fW  ++ oW
                         weightsU   = aU  ++ iU  ++ fU  ++ oU
+
                         deltaError = elesub output label
                         dOut       = eleadd deltaError deltaOut_next
                         dState     = eleadd (elemul3 dOut o (map (sub1 . sqr . tanh) state)) (elemul dState_next f_next)
+                        
                         d_a        = elemul3 dState i (map (sub1 . sqr) a)
                         d_i        = elemul4 dState a i (map sub1 i)
                         d_f        = elemul4 dState prevState f (map sub1 f)
                         d_o        = elemul4 dOut (map tanh state) o (map sub1 o)
+                        
                         deltaGates = d_a ++ d_i ++ d_f ++ d_o
                         deltaX     = mvmul (transpose weightsW) deltaGates  -- not used at the moment
                         deltaOut   = mvmul (transpose weightsU) deltaGates
@@ -148,9 +164,10 @@ coalg_cell (Fx (Cell state innerCell), forwardProps, _)
                         deltaU     = mmmul (map cons deltaGates) (cons output) 
                         deltaB     = deltaGates
 
-                    in  BackProp dState deltaOut deltaW deltaU deltaB f )
+                    in  BackProp dState deltaOut deltaW deltaU deltaB f (tail (nextLayerDeltas ++ [])) nextLayerWeightsW)
       in  Cell updatedState (innerCell, tail forwardProps, backProp' )
-
+coalg (Fx InputCell, forwardProps, backProp)
+    = InputCell
 -- coalg_cell (Fx (Cell state innerCell), forwardProps, _)
 --     = let ForwardProp f i o a x h label output updatedState hyperparameters _ = head forwardProps
 --           ForwardProp {state = prevState}                                     = head (tail forwardProps)
@@ -186,8 +203,7 @@ coalg_cell (Fx (Cell state innerCell), forwardProps, _)
 
 --                     in  BackProp dState deltaOut f deltaW deltaU deltaB (tail nextLayerDeltas) nextLayerWeightsW)
 --       in  Cell updatedState (innerCell, tail forwardProps, backProp' )
--- coalg (Fx InputCell, forwardProps, backProp)
---     = InputCell
+
 
 alg2_cell ::  Cell (Fix Cell, [ForwardProp],  BackProp -> BackProp) -> (Fix Cell, [ForwardProp],  BackProp -> BackProp)
 alg2_cell (Cell state (innerCell, forwardProps, backProp)) 
@@ -225,9 +241,7 @@ updateParameters (Layer weights_w weights_u biases cells innerLayer) backProp
         in  (Layer weights_w' weights_u' biases' cells innerLayer)
 
 
--- train :: Fix Cell -> LossFunction -> Inputs -> DesiredOutput -> Fix Cell 
--- train neuralnet lossfunction sample desiredoutput 
---     = trace (show $ head inputStack) $ 
---         ana coalg $ (nn, BackPropData inputStack desiredoutput [] [[]] )
---             where 
---                 (nn, input)      = cata alg neuralnet
+example = Layer (Weights [[0.45, 0.25]]  [[0.95, 0.8]]  [[0.7, 0.45]]   [[0.6, 0.4]])
+                (Weights [[0.15]]       [[0.8]]         [[0.1]]         [[0.25]])
+                (Biases   [0.2]        [0.65]          [0.15]           [0.1])
+                (Fx (Cell [0.68381] (Fx (Cell [0] (Fx InputCell))))) (Fx InputLayer)
