@@ -39,8 +39,8 @@ type HyperParameters = (Weights, Weights, Biases)
 data ForwardProp = ForwardProp {
                         fF          :: [Double],
                         iF          :: [Double],
-                        oF          :: [Double],
                         aF          :: [Double],
+                        oF          :: [Double],
                         x           :: [Double],
                         h           :: [Double],
                         label       :: Label,
@@ -48,7 +48,16 @@ data ForwardProp = ForwardProp {
                         state       :: [Double],
                         parameters  :: HyperParameters,
                         inputStack  :: Inputs
-                    } deriving Show
+                    } 
+
+instance Show ForwardProp where
+    show (ForwardProp fF iF aF oF x h label output state parameters inputStack) 
+        = "ForwardProp" ++ " f: " ++ show fF ++ " i: " ++  show iF ++  " a: " ++ 
+            show aF ++ " o: " ++ show oF ++  " x: " 
+            ++ show x ++  " h: " ++ show h ++  " label: " ++ show label 
+            ++  " output: " ++ show output ++ " state: " ++
+            show state ++ " parameters: " ++ show parameters ++ show inputStack ++ "\n\n"
+
 
 data BackProp   = BackProp {
                         deltaState_next  :: [Double],
@@ -90,12 +99,15 @@ data Cell  k =  Cell {
                         cellState   :: State,
                         innerCell   :: k
                     }
-                | InputCell  deriving (Functor, Show)
+                | InputCell  deriving (Functor)
 
+instance Show k => Show (Cell k) where
+    show (Cell cellState innercell) = show cellState ++ "\n" ++ show innercell
+    show (InputCell) = "InputCell"
 
 runs :: Layer k -> [ForwardProp]
 runs (Layer weights_W weights_U bias cells innerLayer) 
-    = let initialForwardProp = ForwardProp [] [] [] [] [] [] [] [] [0] (weights_W, weights_U, bias) [([1,2],[0.5]),([0.5,3], [1.25])]
+    = let initialForwardProp = ForwardProp [] [] [] [] [] [] [] [0] [0] (weights_W, weights_U, bias) [([1,2],[0.5]),([0.5,3], [1.25])]
           initialBackProp    = BackProp [0] [0] [[]] [[]] [] [] [[]] NoWeights
           (cells', forwardPropFunc) = cata alg_cell cells
           forwardProp               = forwardPropFunc [initialForwardProp]
@@ -121,16 +133,19 @@ alg_cell (Cell state (innerCell, forwardProps))
                                  inputStack = inputStack} = head fps
                     (weights_w, weights_u, biases) = parameters
                     (x, label) = head inputStack
-                    f = map tanh    $ eleadd3  (mvmul (fW weights_w) x) (mvmul (fW weights_u) h) (fB biases)
+                    f = map sigmoid $ eleadd3  (mvmul (fW weights_w) x) (mvmul (fW weights_u) h) (fB biases)
                     i = map sigmoid $ eleadd3  (mvmul (iW weights_w) x) (mvmul (iW weights_u) h) (iB biases)
                     o = map sigmoid $ eleadd3  (mvmul (oW weights_w) x) (mvmul (oW weights_u) h) (oB biases)
-                    a = map sigmoid $ eleadd3  (mvmul (aW weights_w) x) (mvmul (aW weights_u) h) (aB biases)
+                    a = map tanh    $ eleadd3  (mvmul (aW weights_w) x) (mvmul (aW weights_u) h) (aB biases)
                     state'  = eleadd (elemul a i) (elemul f prevState)
                     output' = elemul o (map tanh state')
-                in  ((ForwardProp f i o a state' x h output' label parameters (tail inputStack)):fps)) . forwardProps
+                in  ((ForwardProp f i a o x h label output' state' parameters (tail inputStack)):fps)) . forwardProps
       in  (Fx (Cell state innerCell), forwardProps')
 alg_cell InputCell = 
     (Fx InputCell, id)
+
+
+
 
 coalg_cell :: (Fix Cell, [ForwardProp], BackProp -> BackProp) -> Cell (Fix Cell, [ForwardProp], BackProp -> BackProp)  
 coalg_cell (Fx (Cell state innerCell), forwardProps, _)
@@ -241,7 +256,7 @@ updateParameters (Layer weights_w weights_u biases cells innerLayer) backProp
         in  (Layer weights_w' weights_u' biases' cells innerLayer)
 
 
-example = Layer (Weights [[0.45, 0.25]]  [[0.95, 0.8]]  [[0.7, 0.45]]   [[0.6, 0.4]])
-                (Weights [[0.15]]       [[0.8]]         [[0.1]]         [[0.25]])
-                (Biases   [0.2]        [0.65]          [0.15]           [0.1])
+example = Layer (Weights [[0.7, 0.45]]  [[0.95, 0.8]]  [[0.45, 0.25]]   [[0.6, 0.4]])
+                (Weights [[0.1]]        [[0.8]]         [[0.15]]         [[0.25]])
+                (Biases   [0.15]        [0.65]          [0.2]            [0.1])
                 (Fx (Cell [0.68381] (Fx (Cell [0] (Fx InputCell))))) (Fx InputLayer)
