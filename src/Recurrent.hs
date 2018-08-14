@@ -105,7 +105,7 @@ data Cell  k =  Cell {
                     }
                 | InputCell  deriving (Functor, Show)
 
-runs :: Layer k -> Deltas --Fix Cell --Layer k 
+runs :: Layer k ->  Layer k 
 runs (Layer weights_W weights_U bias cells innerLayer) 
     = let initialForwardProp = ForwardProp [] [] [] [] [] [] [] [0] [0] (weights_W, weights_U, bias) [([1,2],[0.5]),([0.5,3], [1.25])]
           initialBackProp    = BackProp [0] [0] [0,0,0,0] [0] [[]] NoWeights
@@ -113,8 +113,8 @@ runs (Layer weights_W weights_U bias cells innerLayer)
           forwardProp               = forwardPropFunc [initialForwardProp]
           cells''                   = ana coalg_cell (cells', forwardProp, initialBackProp)
           (cells3, delta_total)     = cata alg2_cell cells''
-         -- layer                     = updateParameters (Layer weights_W weights_U bias cells3 innerLayer) delta_total
-      in  delta_total --delta_total --trace (show delta_total) layer
+          layer                     = updateParameters (Layer weights_W weights_U bias cells3 innerLayer) delta_total
+      in  layer --delta_total --trace (show delta_total) layer
 
 -- run :: Layer k -> Layer k
 -- run (Layer weights_W weights_U bias cells innerLayer) 
@@ -201,7 +201,7 @@ alg2_cell (Cell state deltas (innerCell, delta_total))
             deltaU_total = (eleaddM deltaU1 deltaU2) -- verified
             deltaB_total = (eleadd deltaB1 deltaB2)
             delta_total' = Deltas deltaW_total deltaU_total deltaB_total
-        in  trace (show (deltaW1, deltaU1, deltaB1) ++ "\n") (Fx (Cell state deltas innerCell ), delta_total') --
+        in  (Fx (Cell state deltas innerCell ), delta_total') --
 alg2_cell InputCell 
     = (Fx InputCell, NoDeltas)
 
@@ -217,17 +217,15 @@ updateParameters (Layer weights_w weights_u biases cells innerLayer) delta_total
             weightw_length      = length fW
             weightu_length      = length fU
             biases_length       = length fB
-            p = elesub3 [fW  , iW  , aW  , oW] (map  ((map2 (0.1 *)) . (chunksOf weightw_length)) deltaW_total)
-            q = elesub3 [fU, iU, aU, oU] (map  ((map2 (0.1 *)) . (chunksOf weightu_length)) deltaU_total)
-            r = elesubm [fB, iB, aB, oB] (((map2 (0.1 *)) . (chunksOf biases_length)) deltaB_total)
-            --weights_w'  = Weights fW' iW' aW' oW'
-            weights_w'  = Weights [[]] [[]] [[]] [[]]
-            weights_u'  =  Weights [[]] [[]] [[]] [[]] --Weights fU' iU' aU' oU'
-            biases'     = Biases [] [] [] [] --fB' iB' aB' oB'
-        in trace (show (delta_total)) (Layer weights_w' weights_u' biases' cells innerLayer)
--- [fB', iB', aB', oB'] 
---[fU', iU', aU', oU']
---[fW', iW', aW', oW']
+            (wf:wi:wa:wo:_)     = map cons $ elesubm (fW ++ iW ++ aW ++ oW) (map2 (0.1 *) deltaW_total)
+            (uf:ui:ua:uo:_)     = map cons $ elesubm (fU ++ iU ++ aU ++ oU) (map2 (0.1 *) deltaU_total)
+            (bf:bi:ba:bo:_)     = map cons $ elesub  (fB ++ iB ++ aB ++ oB) (map (0.1 *) deltaB_total)
+            
+            weights_w'  =  Weights wf wi wa wo
+            weights_u'  =  Weights uf ui ua uo 
+            biases'     =  Biases  bf bi ba bo 
+        in (Layer weights_w' weights_u' biases' cells innerLayer)
+
 example = Layer (Weights [[0.7, 0.45]]  [[0.95, 0.8]]  [[0.45, 0.25]]   [[0.6, 0.4]])
                 (Weights [[0.1]]        [[0.8]]         [[0.15]]         [[0.25]])
                 (Biases   [0.15]        [0.65]          [0.2]            [0.1])
