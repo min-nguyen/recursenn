@@ -154,3 +154,6 @@ sub1 x = 1.0 - x
 
 cons :: a -> [a]
 cons x = [x]
+
+outerProduct :: Fractional a => [a] -> [a] -> [[a]]
+outerProduct v1 v2 = mmmul (map cons v1) (cons v2)
