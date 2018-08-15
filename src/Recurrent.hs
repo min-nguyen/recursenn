@@ -48,15 +48,7 @@ data ForwardProp = ForwardProp {
                         stateF      :: [Double],
                         parameters  :: HyperParameters,
                         inputStack  :: Inputs
-                    } 
-
-instance Show ForwardProp where
-    show (ForwardProp fF iF aF oF x h label output state parameters inputStack) 
-        = "ForwardProp" ++ " f: " ++ show fF ++ " i: " ++  show iF ++  " a: " ++ 
-            show aF ++ " o: " ++ show oF ++  " x: " 
-            ++ show x ++  " h: " ++ show h ++  " label: " ++ show label 
-            ++  " output: " ++ show output ++ " state: " ++
-            show state  ++ "\n\n"
+                    } deriving Show
 
 data BackProp   = BackProp {
                         deltaState_next  :: [Double],
@@ -91,7 +83,7 @@ data Layer k =  Layer {
                         innerLayer  :: k
                     }
                 | InputLayer deriving (Functor, Show)
-                
+
 data Deltas  = Deltas {
                         deltaW           :: [[Double]],
                         deltaU           :: [[Double]],
@@ -116,16 +108,13 @@ runs (Layer weights_W weights_U bias cells innerLayer)
     = let initialForwardProp = ForwardProp [] [] [] [] [] [] [] [0] [0] (weights_W, weights_U, bias) [([1,2],[0.5]),([0.5,3], [1.25])]
           initialBackProp    = BackProp [0] [0] [0,0,0,0] [0] [[]] NoWeights
 
-          (cells1, forwardPropFunc) = cata alg_cell cells
-          forwardProp               = forwardPropFunc [initialForwardProp]
+          (cellf, deltaTotalFunc) = ((cata alg2_cell) . (ana coalg_cell) . (\(c, f) -> (c, f [initialForwardProp], initialBackProp)) . (cata alg_cell)) cells 
 
-          cells2                    = ana coalg_cell (cells1, forwardProp, initialBackProp)
-          (cells3, deltaTotalFunc)  = cata alg2_cell cells2
 
           deltaTotal                = deltaTotalFunc $ Deltas (fillMatrix (4 * (length $ fW weights_W)) (length $ fst $ head $ inputStack initialForwardProp) 0.0) 
                                                               (fillMatrix (4 * (length $ fW weights_W)) (length $ fW weights_W) 0.0)
                                                               (replicate  (4 * (length $ fW weights_W)) 0.0)
-          layer                     = updateParameters (Layer weights_W weights_U bias cells3 innerLayer) deltaTotal
+          layer                     = updateParameters (Layer weights_W weights_U bias cellf innerLayer) deltaTotal
       in  layer 
 
 alg_cell ::  Cell (Fix Cell, [ForwardProp] -> [ForwardProp]) -> (Fix Cell, [ForwardProp] -> [ForwardProp]) -- use forwardprop storing inputs, instead of Inputs?
@@ -261,3 +250,5 @@ example = Layer (Weights [[0.7, 0.45]]  [[0.95, 0.8]]  [[0.45, 0.25]]   [[0.6, 0
                 (Weights [[0.1]]        [[0.8]]         [[0.15]]         [[0.25]])
                 (Biases   [0.15]        [0.65]          [0.2]            [0.1])
                 (Fx (EndCell [0.68381] NoDeltas (Fx (Cell [0] NoDeltas (Fx InputCell))))) (Fx InputLayer)
+
+runRecurrent = runs example
