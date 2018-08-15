@@ -17,7 +17,7 @@ module Utils where
 
 import Text.Show.Functions
 import Data.List (transpose)
-import qualified Data.Vector.Sized as V
+import qualified Data.Vec as V
 ---- |‾| -------------------------------------------------------------- |‾| ----
  --- | |                        Recursive Definitions                   | | ---
   --- ‾------------------------------------------------------------------‾---
@@ -124,7 +124,7 @@ eleaddM m1 m2 = [ eleadd v1 v2 | (v1, v2) <- (zip m1 m2)]
 eleadd3 :: Fractional a => [a] -> [a] -> [a] -> [a]
 eleadd3 v1 v2 v3 =   eleadd (eleadd v1 v2) v3
 
-eleadd3v :: (Fractional a, Num a) => V.Vector n [a] -> V.Vector n [a] -> V.Vector n [a] -> V.Vector n [a]
+eleadd3v :: (Fractional a, Num a) => V.Vec4 [a] -> V.Vec4 [a] -> V.Vec4 [a] -> V.Vec4 [a]
 eleadd3v v1 v2 v3 = V.zipWith (zipWith (+)) (V.zipWith (zipWith (+)) v1 v2) v3
 
 elesub :: Fractional a => [a] -> [a] -> [a]
@@ -172,8 +172,8 @@ outerProduct v1 v2 = mmmul (map cons v1) (cons v2)
 snoc :: a -> [a] -> [a]
 snoc x xs = xs ++ [x]
 
-(!) :: forall n a. V.Vector n a -> Int -> a
-(!) = V.unsafeIndex
+(!) :: V.VecList a v => v -> Int -> a
+(!) v n = V.getElem (n - 1) v
 
 mapT2 :: (a -> b) -> (a, a) -> (b, b)
 mapT2 f (x,y) = (f x, f y)
@@ -188,5 +188,5 @@ tuplify3 :: [a] -> (a,a,a)
 tuplify3 [x,y,z] = (x,y,z)
 
 tuplify4 :: [a] -> (a,a,a,a)
-tuplify4 [t,x,y,z] = (t,x,y,z)
+tuplify4 (t:x:y:z:_) = (t,x,y,z)
 

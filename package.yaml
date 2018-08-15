@@ -29,6 +29,9 @@ dependencies:
 - split
 - lens
 - fixed-list
+- nat
+- vector
+- Vec
 # - GHC-Types
 library:
   source-dirs: src

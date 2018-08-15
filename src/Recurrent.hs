@@ -24,7 +24,7 @@ import Data.Maybe
 import Data.Traversable
 import Control.Lens hiding (snoc,cons)
 import Data.List
-import qualified Data.Vector.Sized as V
+import qualified Data.Vec as V
 import Data.Ord
 import Data.List.Split
 import Text.Show.Functions
@@ -37,9 +37,9 @@ type Inputs     = [(X, Label)]
 
 --f i a o
 
-type Gates      =  V.Vector 4 [Double]
-type Weights    =  V.Vector 4 [[Double]]
-type Biases     =  V.Vector 4 [Double]
+type Gates      =  V.Vec4 [Double] 
+type Weights    =  V.Vec4 [[Double]] 
+type Biases     =  V.Vec4 [Double] 
 
 type HyperParameters = (Weights, Weights, Biases)
 
@@ -93,20 +93,21 @@ data Layer k =  Layer {
                 | InputLayer deriving (Functor, Show)
 makeLenses ''Layer
 
-runs :: Layer k ->  Layer k 
+runs :: Layer k -> Layer k 
 runs InputLayer = InputLayer
-runs layer
-    = let initialForwardProp = ForwardProp (V.replicate []) [] [] [] [0] [0] (layer ^. hparams) [([1,2],[0.5]),([0.5,3], [1.25])]
-          initialBackProp    = BackProp [0] [0] [0,0,0,0] [0] [[]] (V.replicate [[]])
+runs (Layer params cells innerLayer)
+    = let (w,u,b) = params
+          initialForwardProp = ForwardProp (V.fromList [[],[],[],[]]) [] [] [] [0] [0] params [([1,2],[0.5]),([0.5,3], [1.25])]
+          initialBackProp    = BackProp [0] [0] [0,0,0,0] [0] [[]] (V.fromList [[],[],[],[]])
 
-          (cellf, deltaTotalFunc) = ((cata alg2_cell) . (ana coalg_cell) . (\(c, f) -> (c, f [initialForwardProp], initialBackProp)) . (cata alg_cell)) (fromJust $ layer ^? cells) 
+          (cellf, deltaTotalFunc) = ((cata alg2_cell) . (ana coalg_cell) . (\(c, f) -> (c, f [initialForwardProp], initialBackProp)) . (cata alg_cell)) cells 
 
-          h                         = length $ (fromJust $ layer ^. hparams ^?_1) ! 1
+          h                         = length $ w ! 1
           deltaTotal                = deltaTotalFunc $ Deltas (fillMatrix (4 * h) (length $ fst $ head $ initialForwardProp ^. inputStack) 0.0) 
                                                               (fillMatrix (4 * h) (h) 0.0)
                                                               (replicate  (4 * h) 0.0)
 
-          layer'                     = updateParameters (layer & cells .~ cellf) deltaTotal
+          layer'                     = updateParameters (Layer params cellf innerLayer) deltaTotal
       in  layer'
 
 
@@ -211,24 +212,37 @@ alg2_cell cell
         in  (Fx (cell {innerCell = nextCell}), deltaTotalFunc') --
 
 
-
 updateParameters ::  Layer k -> Deltas -> Layer k
 updateParameters layer delta_total
     =   let Deltas deltaW_total deltaU_total deltaB_total = delta_total
+            (weights_w,weights_u,biases) = fromJust $ layer ^? hparams
+            [fW, iW, aW, oW] = V.toList weights_w
+            [fU, iU, aU, oU] = V.toList weights_u
+            [fB, iB, aB, oB ]= V.toList biases
+            w     = V.fromList $ map cons $ elesubm (fW ++ iW ++ aW ++ oW) (map2 (0.1 *) deltaW_total)
+            u     = V.fromList $ map cons $ elesubm (fU ++ iU ++ aU ++ oU) (map2 (0.1 *) deltaU_total)
+            b     = V.fromList $ map cons $ elesub  (fB ++ iB ++ aB ++ oB) (map (0.1 *) deltaB_total)
 
-            (weightsW, weightsU) = mapT2 (V.foldr (++) [[]]) (layer^.hparams._1, layer^.hparams._2)
-            biases               = (V.foldr (++) [] (layer^.hparams._3))
-            w'                   =  elesubm (weightsW) (map2 (0.1 *) deltaW_total)
-            u'                   =  elesubm (weightsU) (map2 (0.1 *) deltaU_total)
-            b'                   =  elesub  (biases) (map  (0.1 *) deltaB_total)
-            f                    =  V.fromTuple . tuplify4 . map cons
-            hparams'             =  (f w', f u', f b')
+        in layer & hparams .~ (w,u,b)
 
-        in layer & hparams .~ hparams'
 
-example = Layer (V.fromTuple ([[0.7, 0.45]],  [[0.95, 0.8]],  [[0.45, 0.25]],   [[0.6, 0.4]]),
-                 V.fromTuple ([[0.1]]      ,  [[0.8]]      ,   [[0.15]]     ,    [[0.25]]),
-                 V.fromTuple ([0.15]       , [0.65]         , [0.2]        ,    [0.1]))
+-- updateParameters ::  Layer k -> Deltas -> Layer k
+-- updateParameters layer delta_total
+--     =   let Deltas deltaW_total deltaU_total deltaB_total = delta_total
+
+--             (weightsW, weightsU) = mapT2 (V.foldl (++) [[]]) (layer^.hparams._1, layer^.hparams._2)
+--             biases               = (V.foldl (++) [] (layer^.hparams._3))
+--             w'                   =  elesubm (weightsW) (map2 (0.1 *) deltaW_total)
+--             u'                   =  elesubm (weightsU) (map2 (0.1 *) deltaU_total)
+--             b'                   =  elesub  (biases) (map  (0.1 *) deltaB_total)
+--             f                    =  V.fromTuple . tuplify4 . map cons
+--             hparams'             =  (f w', f u', f b')
+
+--         in layer & hparams .~ hparams'
+
+example = Layer (V.fromList [[[0.7, 0.45]],  [[0.95, 0.8]],  [[0.45, 0.25]],   [[0.6, 0.4]]],
+                 V.fromList [[[0.1]]      ,  [[0.8]]      ,   [[0.15]]     ,    [[0.25]]],
+                 V.fromList [[0.15]       , [0.65]         , [0.2]        ,    [0.1]])
                 (Fx (EndCell [0.68381] NoDeltas (Fx (Cell [0] NoDeltas (Fx InputCell))))) (Fx InputLayer)
 
--- runRecurrent = runs example
+runRecurrent =  print $ show $ runs example
