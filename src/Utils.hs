@@ -17,8 +17,7 @@ module Utils where
 
 import Text.Show.Functions
 import Data.List (transpose)
-
-
+import qualified Data.Vector.Sized as V
 ---- |‾| -------------------------------------------------------------- |‾| ----
  --- | |                        Recursive Definitions                   | | ---
   --- ‾------------------------------------------------------------------‾---
@@ -38,6 +37,9 @@ cata alg = alg . fmap (cata alg) . unFix
 
 ana :: Functor f => (a -> f a) -> (a -> Fix f)
 ana coalg = Fx . fmap (ana coalg) . coalg
+
+meta :: Functor f => (f a -> a) -> (a -> b) -> (b -> f b) -> (Fix f -> Fix f)
+meta alg e coalg = ana coalg . e . cata alg
 
 doggo :: Functor f => (f (Fix f, t) -> f (Fix f)) -> (f (Fix f, t) -> t) -> Fix f -> (Fix f, t)
 doggo algx algy = app . fmap (doggo algx algy) . unFix
@@ -86,6 +88,12 @@ dotv v1 v2 = mvmul (map (\x -> [x]) v1) v2
 mvmul :: Num a => [[a]] -> [a] -> [a]
 mvmul mat vec = map (sum . (zipWith (*) vec)) mat
 
+mvmulk :: Num a => [a] -> [[a]] -> [a]
+mvmulk vec mat = map (sum . (zipWith (*) vec)) mat
+
+-- mvmulkf :: (Num a, F.FixedList f) => [a] -> f [[a]] -> f [a]
+-- mvmulkf vec mat = map (sum . (zipWith (*) vec)) mat
+
 mmmul :: Fractional a => [[a]] -> [[a]] -> [[a]]
 mmmul m1 m2 = [ [ sum (zipWith (*) v2 v1)  | v2 <- (transpose m2) ] |  v1 <- m1 ]
 
@@ -115,6 +123,9 @@ eleaddM m1 m2 = [ eleadd v1 v2 | (v1, v2) <- (zip m1 m2)]
 
 eleadd3 :: Fractional a => [a] -> [a] -> [a] -> [a]
 eleadd3 v1 v2 v3 =   eleadd (eleadd v1 v2) v3
+
+eleadd3v :: (Fractional a, Num a) => V.Vector n [a] -> V.Vector n [a] -> V.Vector n [a] -> V.Vector n [a]
+eleadd3v v1 v2 v3 = V.zipWith (zipWith (+)) (V.zipWith (zipWith (+)) v1 v2) v3
 
 elesub :: Fractional a => [a] -> [a] -> [a]
 elesub v1 v2 =   zipWith (-) v1 v2 
@@ -157,3 +168,25 @@ cons x = [x]
 
 outerProduct :: Fractional a => [a] -> [a] -> [[a]]
 outerProduct v1 v2 = mmmul (map cons v1) (cons v2)
+
+snoc :: a -> [a] -> [a]
+snoc x xs = xs ++ [x]
+
+(!) :: forall n a. V.Vector n a -> Int -> a
+(!) = V.unsafeIndex
+
+mapT2 :: (a -> b) -> (a, a) -> (b, b)
+mapT2 f (x,y) = (f x, f y)
+
+thrd :: (a, b, c) -> c
+thrd (a, b, c) = c
+
+tuplify2 :: [a] -> (a,a)
+tuplify2 [x,y] = (x,y)
+
+tuplify3 :: [a] -> (a,a,a)
+tuplify3 [x,y,z] = (x,y,z)
+
+tuplify4 :: [a] -> (a,a,a,a)
+tuplify4 [t,x,y,z] = (t,x,y,z)
+

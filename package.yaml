@@ -28,6 +28,7 @@ dependencies:
 - singletons
 - split
 - lens
+- fixed-list
 # - GHC-Types
 library:
   source-dirs: src

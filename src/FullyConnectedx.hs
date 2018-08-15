@@ -118,11 +118,7 @@ backward weights biases BackPropData {_inputStack = (inputs:xs), _outerDeltas = 
 
 train :: Fix Layer -> LossFunction -> Inputs -> DesiredOutput -> Fix Layer 
 train neuralnet lossfunction sample desiredoutput 
-    = trace (show $ head inputStack) $ 
-        ana coalg $ (nn, BackPropData inputStack desiredoutput [] [[]] )
-            where 
-                (nn, diff_fun)      = cata alg neuralnet
-                inputStack   = diff_fun [sample]
+    =  meta alg (\(nn, diff_fun) -> (nn, BackPropData (diff_fun [sample]) desiredoutput [] [[]] )) coalg $ neuralnet
 
 trains :: Fix Layer -> LossFunction -> [Inputs] -> [DesiredOutput] -> Fix Layer
 trains neuralnet lossfunction samples desiredoutputs  
