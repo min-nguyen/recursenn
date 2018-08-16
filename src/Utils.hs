@@ -41,6 +41,10 @@ ana coalg = Fx . fmap (ana coalg) . coalg
 meta :: Functor f => (f a -> a) -> (a -> b) -> (b -> f b) -> (Fix f -> Fix f)
 meta alg e coalg = ana coalg . e . cata alg
 
+hylo :: Functor f => (f b -> b) -> (a -> f a) -> (a -> b)
+hylo phi psi = cata phi . ana psi
+
+
 doggo :: Functor f => (f (Fix f, t) -> f (Fix f)) -> (f (Fix f, t) -> t) -> Fix f -> (Fix f, t)
 doggo algx algy = app . fmap (doggo algx algy) . unFix
         where app = \k -> (Fx (algx k), algy k)
