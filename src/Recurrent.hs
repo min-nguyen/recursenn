@@ -93,27 +93,45 @@ data Layer k =  Layer {
                 | InputLayer deriving (Functor, Show)
 makeLenses ''Layer
 
+
+
+algcomp' :: (Functor f, Functor g) =>
+            (a -> Fix g) -> (f (Fix g) -> (Fix g)) -> (g a -> a) -> (f a -> a)
+algcomp' h phi phi' = (cata phi') . (phi) . (fmap h)
+
+initForwardProp :: Int -> Int -> HyperParameters -> Inputs -> ForwardProp
+initForwardProp h d params sample = ForwardProp (V.fromList (replicate 4 [])) [] [] [] (replicate h 0.0) (replicate h 0.0) params sample
+
+initBackProp :: Int -> Int -> BackProp
+initBackProp h d = BackProp (replicate d 0) (replicate d 0) (replicate (4*d) 0) (replicate d 0) [[]] (V.fromList [[],[],[],[]])
+
+initDelta :: Int -> Int -> Deltas
+initDelta h d = Deltas  (fillMatrix (4 * h) (d) 0.0) 
+                        (fillMatrix (4 * h) (h) 0.0)
+                        (replicate  (4 * h) 0.0)
+
+
 runs :: Layer k -> Layer k 
 runs InputLayer = InputLayer
 runs (Layer params cells innerLayer)
-    = let (w,u,b) = params
-          initialForwardProp = ForwardProp (V.fromList [[],[],[],[]]) [] [] [] [0] [0] params [([1,2],[0.5]),([0.5,3], [1.25])]
-          initialBackProp    = BackProp [0] [0] [0,0,0,0] [0] [[]] (V.fromList [[],[],[],[]])
+    = let sample = [([1,2],[0.5]),([0.5,3], [1.25])]
+          dDim = length . fst $ head sample
+          hDim = let (w,u,b) = params in length $ w ! 1
+   
+          initialForwardProp = initForwardProp hDim dDim params sample
+          initialBackProp    = initBackProp hDim dDim
+          initialDeltaTotal  = initDelta  hDim dDim
 
           (cellf, deltaTotalFunc) = ((cata alg2_cell) . (ana coalg_cell) . (\(c, f) -> (c, f [initialForwardProp], initialBackProp)) . (cata alg_cell)) cells 
 
-          h                         = length $ w ! 1
-          deltaTotal                = deltaTotalFunc $ Deltas (fillMatrix (4 * h) (length $ fst $ head $ initialForwardProp ^. inputStack) 0.0) 
-                                                              (fillMatrix (4 * h) (h) 0.0)
-                                                              (replicate  (4 * h) 0.0)
+          deltaTotal                = deltaTotalFunc initialDeltaTotal
 
-          layer'                     = updateParameters (Layer params cellf innerLayer) deltaTotal
-      in  layer'
+      in  updateParameters (Layer params cellf innerLayer) deltaTotal
 
 
 compGates :: HyperParameters -> [Double] -> [Double] -> Gates
 compGates (weightsW, weightsU, biases) x h 
-    =  V.map ((snoc tanh (replicate 3 sigmoid)) <*>) (eleadd3v (V.map (mvmulk x) weightsW) (V.map (mvmulk h) weightsU) biases)
+    =  V.map ((replaceElement (replicate 4 sigmoid)  2 tanh ) <*>) (eleadd3v (V.map (mvmulk x) weightsW) (V.map (mvmulk h) weightsU) biases)
 
 
 alg_cell ::  Cell (Fix Cell, [ForwardProp] -> [ForwardProp]) -> (Fix Cell, [ForwardProp] -> [ForwardProp]) -- use forwardprop storing inputs, instead of Inputs?
@@ -154,7 +172,7 @@ coalg_cell (Fx (EndCell state deltas innerCell), forwardProps, backProp)
         (deltaX, deltaOut)     = mapT2 (mvmulk deltaGates . transpose) (weightsW, weightsU)  -- not used at the moment
       
         deltaW     = outerProduct deltaGates (fp^.x) 
-        deltaU     = fillMatrix (4 * (length ((fp^.params._2) ! 1))) (length $ head ((fp^.params._2) ! 1)) (0.0 :: Double)
+        deltaU     = fillMatrix (4 * length d_f) (length d_o) (0.0 :: Double)
         deltaB     = deltaGates
         backProp'  = backProp & nextDState .~ dState 
                               & nextDOut   .~ deltaOut 
@@ -225,20 +243,6 @@ updateParameters layer delta_total
 
         in layer & hparams .~ (w,u,b)
 
-
--- updateParameters ::  Layer k -> Deltas -> Layer k
--- updateParameters layer delta_total
---     =   let Deltas deltaW_total deltaU_total deltaB_total = delta_total
-
---             (weightsW, weightsU) = mapT2 (V.foldl (++) [[]]) (layer^.hparams._1, layer^.hparams._2)
---             biases               = (V.foldl (++) [] (layer^.hparams._3))
---             w'                   =  elesubm (weightsW) (map2 (0.1 *) deltaW_total)
---             u'                   =  elesubm (weightsU) (map2 (0.1 *) deltaU_total)
---             b'                   =  elesub  (biases) (map  (0.1 *) deltaB_total)
---             f                    =  V.fromTuple . tuplify4 . map cons
---             hparams'             =  (f w', f u', f b')
-
---         in layer & hparams .~ hparams'
 
 example = Layer (V.fromList [[[0.7, 0.45]],  [[0.95, 0.8]],  [[0.45, 0.25]],   [[0.6, 0.4]]],
                  V.fromList [[[0.1]]      ,  [[0.8]]      ,   [[0.15]]     ,    [[0.25]]],
