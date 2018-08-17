@@ -15,6 +15,7 @@
 
 module Utils where
 
+import Control.Lens hiding (snoc,cons)
 import Text.Show.Functions
 import Data.List (transpose)
 import qualified Data.Vec as V
@@ -194,3 +195,5 @@ tuplify3 [x,y,z] = (x,y,z)
 tuplify4 :: [a] -> (a,a,a,a)
 tuplify4 (t:x:y:z:_) = (t,x,y,z)
 
+(%?) x f = case x of Nothing -> Nothing
+                     Just x' -> Just (x' %~ f)
