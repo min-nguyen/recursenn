@@ -116,7 +116,6 @@ initDelta h d = Deltas  (fillMatrix (4 * h) (d) 0.0)
                         (replicate  (4 * h) 0.0)
                         [[]]
 
-
 runs' :: Fix Layer  -> Fix Layer
 runs' layer        = let (layer', forwardProp') = cata alg_layer layer
                          sample = [([1,2],[0.5]),([0.5,3], [1.25])]
@@ -133,7 +132,6 @@ alg_layer (Layer params cells (innerLayer, nextForwardProp))
                         (cell, fpFunc)     = cata alg_cell cells 
                         layerFP            = fpFunc [initialForwardProp]
                     in  (layerFP:fps)) . nextForwardProp
-
       in (Fx (Layer params cells innerLayer), forwardProp) 
 
 coalg_layer :: (Fix Layer, [[ForwardProp]], BackProp) -> Layer (Fix Layer, [[ForwardProp]], BackProp)
@@ -141,7 +139,7 @@ coalg_layer (Fx InputLayer, fp, bp)
             = InputLayer
 coalg_layer (Fx (Layer params cells innerLayer), fps, backProp)
     =   let fp                  = head fps
-            (w,u,b) = params
+            (w,u,b)             = params
             (hDim, dDim)        = (length $ w ! 1, length $ head $ w ! 1)
             initialDeltaTotal   = initDelta hDim dDim
             (cell, deltaFunc)   = ((cata alg2_cell) . (ana coalg_cell)) (cells, fp, backProp)
@@ -151,18 +149,6 @@ coalg_layer (Fx (Layer params cells innerLayer), fps, backProp)
                                             (replicate dDim 0) (Just $ deltaXs deltaTotal) (Just $ w )
 
         in  updateParameters (Layer params cell (innerLayer, tail fps, backProp')) deltaTotal
-
-compGates :: HyperParameters -> [Double] -> [Double] -> Gates
-compGates (weightsW, weightsU, biases) x h 
-    =  V.map ((replaceElement (replicate 4 sigmoid)  2 tanh ) <*>) (eleadd3v (V.map (mvmulk x) weightsW) (V.map (mvmulk h) weightsU) biases)
-
-compDGates :: Gates -> [Double] -> [Double] -> [Double] -> [Double] -> [Double]
-compDGates gate dOut dState state lastState 
-    = let   d_f        = elemul4 dState lastState (gate ! 1) (map sub1 (gate ! 1))
-            d_i        = elemul4 dState (gate ! 3) (gate ! 2) (map sub1 (gate ! 2))
-            d_a        = elemul3 dState (gate ! 2) (map (sub1 . sqr) (gate ! 3))
-            d_o        = elemul4 dOut (map tanh state) (gate ! 4) (map sub1 (gate ! 4))
-      in    d_f ++ d_i ++ d_a ++ d_o
 
 alg_cell ::  Cell (Fix Cell, [ForwardProp] -> [ForwardProp]) -> (Fix Cell, [ForwardProp] -> [ForwardProp]) -- use forwardprop storing inputs, instead of Inputs?
 alg_cell InputCell = 
@@ -185,12 +171,9 @@ coalg_cell (Fx (EndCell state deltas innerCell), forwardProps, backProp)
         (gate, updatedState)    = (fp ^. gates, fp ^. prevState)
         (weightsW, weightsU)    = mapT2 (V.foldr (++) [[]]) (fp^.params._1, fp^.params._2)
     
-        -- nextLayerDelta = head nextLayerDeltas
-        -- deltaError = elemul (mvmul (transpose nextLayerWeightsW) nextLayerDeltaX) output
-        -- deltaX
         deltaError =  case (backProp ^. nextLayerWeights,
                             backProp ^. nextLayerDeltaXs) of (Nothing, _)      -> elesub (fp^.output) (fp^.label)
-                                                             (Just w, Just dX) -> elemul (mvmul ((transpose $ V.foldl (++) [[]] w) :: [[Double]]) (head dX)) (fp ^. output) 
+                                                             (Just w, Just dX) -> elemul (mvmul ((transpose $ V.foldr (++) [[]] w) :: [[Double]]) (head dX)) (fp ^. output) 
         
         dState     = (elemul3 deltaError (gate ! 4) (map (sub1 . sqr . tanh) updatedState))
 
@@ -216,11 +199,9 @@ coalg_cell (Fx (Cell state deltas innerCell), forwardProps, backProp)
         BackProp dState_next deltaError_next deltaGates_next
                     f_next nextLayerDeltas nextLayerWeightsW = backProp
 
-   
-
         deltaError =  case (backProp ^. nextLayerWeights,
                             backProp ^. nextLayerDeltaXs) of (Nothing, _)      -> eleadd (elesub (fp^.output)  (fp^.label)) deltaError_next
-                                                             (Just w, Just dX) -> elemul (mvmul  (transpose $ V.foldl (++) [[]] w) (head dX)) (fp ^. output) 
+                                                             (Just w, Just dX) -> elemul (mvmul  (transpose $ V.foldr (++) [[]] w) (head dX)) (fp ^. output) 
         
         dState     = eleadd (elemul3 deltaError (gate ! 4) (map (sub1 . sqr . tanh) updatedState)) (elemul dState_next f_next)
         
@@ -259,6 +240,18 @@ alg2_cell cell
         in  (Fx (cell {innerCell = nextCell}), deltaTotalFunc') --
 
 
+compGates :: HyperParameters -> [Double] -> [Double] -> Gates
+compGates (weightsW, weightsU, biases) x h 
+    =  V.map ((replaceElement (replicate 4 sigmoid)  2 tanh ) <*>) (eleadd3v (V.map (mvmulk x) weightsW) (V.map (mvmulk h) weightsU) biases)
+
+compDGates :: Gates -> [Double] -> [Double] -> [Double] -> [Double] -> [Double]
+compDGates gate dOut dState state lastState 
+    = let   d_f        = elemul4 dState lastState (gate ! 1) (map sub1 (gate ! 1))
+            d_i        = elemul4 dState (gate ! 3) (gate ! 2) (map sub1 (gate ! 2))
+            d_a        = elemul3 dState (gate ! 2) (map (sub1 . sqr) (gate ! 3))
+            d_o        = elemul4 dOut (map tanh state) (gate ! 4) (map sub1 (gate ! 4))
+      in    d_f ++ d_i ++ d_a ++ d_o
+
 updateParameters ::  Layer k -> Deltas -> Layer k
 updateParameters layer delta_total
     =   let Deltas deltaW_total deltaU_total deltaB_total deltaXs = delta_total
@@ -273,10 +266,14 @@ updateParameters layer delta_total
         in layer & hparams .~ (w', u', b')
 
 
-example = Fx (Layer (V.fromList [[[0.7, 0.45]],  [[0.95, 0.8]],  [[0.45, 0.25]],   [[0.6, 0.4]]],
+example =   Fx (Layer (V.fromList [[[0.7]],  [[0.95]],  [[0.45]],   [[0.6]]],
+                       V.fromList [[[0.1]]      ,  [[0.8]]      ,   [[0.15]]   ,    [[0.25]]],
+                       V.fromList [[0.15]       , [0.65]        , [0.2]        ,    [0.1]])
+                     (Fx (EndCell [0.68381] NoDeltas (Fx (Cell [0] NoDeltas (Fx InputCell)))))
+            (Fx (Layer (V.fromList [[[0.7, 0.45]],  [[0.95, 0.8]],  [[0.45, 0.25]],   [[0.6, 0.4]]],
                      V.fromList [[[0.1]]      ,  [[0.8]]      ,   [[0.15]]     ,    [[0.25]]],
                      V.fromList [[0.15]       , [0.65]         , [0.2]        ,    [0.1]])
-                    (Fx (EndCell [0.68381] NoDeltas (Fx (Cell [0] NoDeltas (Fx InputCell))))) (Fx InputLayer))
+                    (Fx (EndCell [0.68381] NoDeltas (Fx (Cell [0] NoDeltas (Fx InputCell))))) (Fx InputLayer))))
 
 runRecurrent =  print "hi" -- $ show $ runs example
 

@@ -194,6 +194,3 @@ tuplify3 [x,y,z] = (x,y,z)
 
 tuplify4 :: [a] -> (a,a,a,a)
 tuplify4 (t:x:y:z:_) = (t,x,y,z)
-
-(%?) x f = case x of Nothing -> Nothing
-                     Just x' -> Just (x' %~ f)
