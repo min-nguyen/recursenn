@@ -96,44 +96,40 @@ data Layer k =  Layer {
                 | InputLayer deriving (Functor, Show)
 makeLenses ''Layer
 
-runs' :: Fix Layer  -> Fix Layer
-runs' layer        = let (layer', forwardProp') = cata alg_layer layer
-                         sample = [([1,2],[0.5]),([0.5,3], [1.25])]
-                     in ana coalg_layer (layer', forwardProp' sample, (initBackProp 1 2))
+runs' :: Fix Layer  -> Inputs -> Fix Layer
+runs' layer sample = let f = \(layer', forwardProp') -> (layer', forwardProp' sample, (initBackProp 1 2 Nothing Nothing))
+                     in  meta algLayer f coalgLayer layer
 
-alg_layer :: Layer (Fix Layer, Inputs -> [[ForwardProp]]) -> (Fix Layer, Inputs -> [[ForwardProp]])
-alg_layer InputLayer = (Fx InputLayer, (\sample -> cons [ForwardProp emptyGates [0] [0] l x [0] emptyParams sample | (x,l) <- sample  ]))
-alg_layer (Layer params cells (innerLayer, nextForwardProp))
+algLayer :: Layer (Fix Layer, Inputs -> [[ForwardProp]]) -> (Fix Layer, Inputs -> [[ForwardProp]])
+algLayer InputLayer = (Fx InputLayer, (\sample -> cons [ForwardProp emptyGates [0] [0] l x [0] emptyParams sample | (x,l) <- sample  ]))
+algLayer (Layer params cells (innerLayer, nextForwardProp))
     = let forwardProp  = (\(fps :: [[ForwardProp]]) ->
                     let fp = head fps
                         inputs = map tuplify2 $ chunksOf 2 $ fp <**> [(^.output), (^.label)] 
                         (hDim, dDim)       = let (w,u,b) = params in (length $ w ! 1, length $ head $ w ! 1)
                         initialForwardProp = initForwardProp hDim dDim params inputs
-                        (cell, fpFunc)     = cata alg_cell cells 
+                        (cell, fpFunc)     = cata algCell cells 
                         layerFP            = fpFunc [initialForwardProp]
                     in  (layerFP:fps)) . nextForwardProp
       in (Fx (Layer params cells innerLayer), forwardProp) 
 
-coalg_layer :: (Fix Layer, [[ForwardProp]], BackProp) -> Layer (Fix Layer, [[ForwardProp]], BackProp)
-coalg_layer (Fx InputLayer, fp, bp)
-            = InputLayer
-coalg_layer (Fx (Layer params cells innerLayer), fps, backProp)
-    =   let fp                  = head fps
-            (w,u,b)             = params
+coalgLayer :: (Fix Layer, [[ForwardProp]], BackProp) -> Layer (Fix Layer, [[ForwardProp]], BackProp)
+coalgLayer (Fx InputLayer, fp, bp)
+    = InputLayer
+coalgLayer (Fx (Layer params cells innerLayer), fps, backProp)
+    =   let (w,u,b)             = params
             (hDim, dDim)        = (length $ w ! 1, length $ head $ w ! 1)
-            initialDeltaTotal   = initDelta hDim dDim
-            (cell, deltaFunc)   = ((cata alg2_cell) . (ana coalg_cell)) (cells, fp, backProp)
-            deltaTotal          = deltaFunc initialDeltaTotal
+            (cell, deltaFunc)   = hylo algCell2 coalgCell (cells, head fps, backProp)
+            deltaTotal          = deltaFunc (initDelta hDim dDim)
 
-            backProp'           = BackProp (replicate dDim 0) (replicate dDim 0) (replicate (4*dDim) 0) 
-                                            (replicate dDim 0) (Just $ deltaXs deltaTotal) (Just $ w )
+            backProp'           = initBackProp hDim dDim (Just $ deltaXs deltaTotal) (Just w)
 
         in  updateParameters (Layer params cell (innerLayer, tail fps, backProp')) deltaTotal
 
-alg_cell ::  Cell (Fix Cell, [ForwardProp] -> [ForwardProp]) -> (Fix Cell, [ForwardProp] -> [ForwardProp]) -- use forwardprop storing inputs, instead of Inputs?
-alg_cell InputCell = 
+algCell ::  Cell (Fix Cell, [ForwardProp] -> [ForwardProp]) -> (Fix Cell, [ForwardProp] -> [ForwardProp]) -- use forwardprop storing inputs, instead of Inputs?
+algCell InputCell = 
     (Fx InputCell, id)
-alg_cell cell
+algCell cell
     = let (nextCell, forwardProps) = (_innerCell cell)
           forwardProps' = (\fps -> 
                 let fp = head fps
@@ -145,10 +141,10 @@ alg_cell cell
       in  (Fx (cell & innerCell .~ nextCell), forwardProps')
 
 
-coalg_cell :: (Fix Cell, [ForwardProp], BackProp) -> Cell (Fix Cell, [ForwardProp], BackProp) 
-coalg_cell (Fx InputCell, forwardProps, backProp)
+coalgCell :: (Fix Cell, [ForwardProp], BackProp) -> Cell (Fix Cell, [ForwardProp], BackProp) 
+coalgCell (Fx InputCell, forwardProps, backProp)
     = InputCell
-coalg_cell (Fx cell, forwardProps, backProp)
+coalgCell (Fx cell, forwardProps, backProp)
   = let fp = head forwardProps
         lastState               = (head (tail forwardProps)) ^. prevState 
         (gate, updatedState)    = (fp ^. gates, fp ^. prevState)
@@ -185,10 +181,10 @@ coalg_cell (Fx cell, forwardProps, backProp)
              & cellDeltas .~ (Deltas deltaW deltaU deltaB [deltaX])
              & innerCell .~ (fromJust (cell ^? innerCell), tail forwardProps, backProp'))
             
-alg2_cell ::  Cell (Fix Cell, Deltas -> Deltas) ->  (Fix Cell, Deltas -> Deltas)
-alg2_cell InputCell 
+algCell2 ::  Cell (Fix Cell, Deltas -> Deltas) ->  (Fix Cell, Deltas -> Deltas)
+algCell2 InputCell 
     = (Fx InputCell, id)
-alg2_cell cell
+algCell2 cell
     =   let (state, deltas, (nextCell, deltaTotalFunc)) = (_cellState cell, _cellDeltas cell, _innerCell cell)
             Deltas deltaW1 deltaU1 deltaB1 deltaXs1 = deltas
             deltaTotalFunc' = (\deltaTotal -> 
@@ -236,10 +232,12 @@ emptyParams = ((V.fromList (replicate 4 [[]])),(V.fromList (replicate 4 [[]])),(
 emptyGates  = (V.fromList (replicate 4 []))
 
 initForwardProp :: Int -> Int -> HyperParameters -> Inputs -> ForwardProp
-initForwardProp h d params sample = ForwardProp (V.fromList (replicate 4 [])) [] [] [] (replicate h 0.0) (replicate h 0.0) params sample
+initForwardProp h d params sample 
+    = ForwardProp (V.fromList (replicate 4 [])) [] [] [] (replicate h 0.0) (replicate h 0.0) params sample
 
-initBackProp :: Int -> Int -> BackProp
-initBackProp h d = BackProp (replicate d 0) (replicate d 0) (replicate (4*d) 0) (replicate d 0) Nothing Nothing
+initBackProp :: Int -> Int -> Maybe [[Double]] -> Maybe Weights -> BackProp
+initBackProp h d deltaX weights 
+    = BackProp (replicate d 0) (replicate d 0) (replicate (4*d) 0) (replicate d 0) deltaX weights
 
 initDelta :: Int -> Int -> Deltas
 initDelta h d = Deltas  (fillMatrix (4 * h) (d) 0.0) 
@@ -256,8 +254,9 @@ example =   Fx (Layer (V.fromList [[[0.7]],  [[0.95]],  [[0.45]],   [[0.6]]],
                      V.fromList [[0.15]       , [0.65]         , [0.2]        ,    [0.1]])
                     (Fx (EndCell [0.68381] NoDeltas (Fx (Cell [0] NoDeltas (Fx InputCell))))) (Fx InputLayer))))
 
-runRecurrent =  print "hi" -- $ show $ runs example
-
+runRecurrent = print $ show $ runs' example sample
+            where sample =  [([1,2],[0.5]),([0.5,3], [1.25])]
+                         
 
 
 runs :: Layer k -> Layer k 
@@ -268,12 +267,12 @@ runs (Layer params cells innerLayer)
           hDim = let (w,u,b) = params in length $ w ! 1
    
           initialForwardProp = initForwardProp hDim dDim params sample
-          initialBackProp    = initBackProp hDim dDim
+          initialBackProp    = initBackProp hDim dDim Nothing Nothing
           initialDeltaTotal  = initDelta  hDim dDim
 
           (cellf, deltaTotalFunc) = let h =  (\(c, f) -> (c, f [initialForwardProp], initialBackProp))
 
-                                    in  ((cata alg2_cell) . (meta alg_cell h coalg_cell)) cells
+                                    in  ((cata algCell2) . (meta algCell h coalgCell)) cells
 
           deltaTotal                = deltaTotalFunc initialDeltaTotal
 
