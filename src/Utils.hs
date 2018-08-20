@@ -11,12 +11,15 @@
      GADTs,
      DataKinds,
      KindSignatures,
-     RecordWildCards #-}
+     RecordWildCards,
+     LambdaCase #-}
 
 module Utils where
-
+import Prelude
 import Control.Lens hiding (snoc,cons)
 import Text.Show.Functions
+import Control.Monad    hiding (mapM, sequence)
+-- import qualified Data.Functor.Fixedpoint    as F
 import Data.List (transpose)
 import qualified Data.Vec as V
 ---- |‾| -------------------------------------------------------------- |‾| ----
@@ -32,6 +35,12 @@ instance (Show (f (Fix f))) => Show (Fix f) where
 
 unFix :: Fix f -> f (Fix f)
 unFix (Fx x) = x
+
+cataM :: (Traversable f, Monad m) => (f a -> m a) -> (Fix f -> m a)
+{-# INLINE [0] cataM #-}
+cataM phiM = self
+    where
+    self = phiM <=< (mapM self . unFix)
 
 cata :: Functor f => (f a -> a) -> Fix f -> a
 cata alg = alg . fmap (cata alg) . unFix
@@ -180,8 +189,20 @@ snoc x xs = xs ++ [x]
 (!) :: V.VecList a v => v -> Int -> a
 (!) v n = V.getElem (n - 1) v
 
+class (V.VecList a v) => List a v where
+    toVector :: [a] -> v
+
+instance List Double (V.Vec4 Double) where
+    toVector xs = V.fromList xs
+
+instance List [Double] (V.Vec4 [Double]) where
+    toVector xs = V.fromList xs
+
 mapT2 :: (a -> b) -> (a, a) -> (b, b)
 mapT2 f (x,y) = (f x, f y)
+
+mapT3 :: (List a1 v1, List a2 v2) => ([a1] -> v1) -> ([a2] -> v2) -> ([a1], [a1], [a2]) -> (v1, v1, v2)
+mapT3 f g (x,y,z) = (f x, f y, g z)
 
 thrd :: (a, b, c) -> c
 thrd (a, b, c) = c

@@ -24,13 +24,17 @@ dependencies:
 - vector-sized
 - linguistic-ordinals
 - natural
+- containers
 - monomorphic
+- transformers
+- recursion-schemes
 - singletons
 - split
 - lens
 - fixed-list
 - nat
 - vector
+- unification-fd
 - Vec
 # - GHC-Types
 library:
