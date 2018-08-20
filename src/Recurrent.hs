@@ -156,18 +156,18 @@ coalgCell (Fx cell, forwardProps, backProp)
         lastState               = (head (tail forwardProps)) ^. prevState 
         (gate, updatedState)    = (fp ^. gates, fp ^. prevState)
         (weightsW, weightsU)    = mapT2 (V.foldr (++) [[]]) (fp^.params._1, fp^.params._2)
-    
+
         BackProp dState_next deltaError_next deltaGates_next
                 f_next nextLayerDeltas nextLayerWeightsW = backProp
 
-        deltaError =  
+        dOut =  
             case (cell, backProp ^. nextLayerWs, backProp ^. nextLayerDXs) 
             of  (EndCell {},Nothing, _)  -> (elesub (fp^.output)  (fp^.label)) 
                 (Cell {},   Nothing, _)  -> eleadd deltaError_next (elesub (fp^.output)  (fp^.label))
                 (_, Just w, Just dX)     -> elemul (mvmul  (transpose $ V.foldr (++) [[]] w) (head dX)) (fp ^. output) 
         
-        deltaState = eleadd (elemul3 deltaError (gate ! 4) (map (sub1 . sqr . tanh) updatedState)) (elemul dState_next f_next)
-        deltaGates = compDGates gate deltaError deltaState updatedState lastState 
+        deltaState = eleadd (elemul3 dOut (gate ! 4) (map (sub1 . sqr . tanh) updatedState)) (elemul dState_next f_next)
+        deltaGates = compDGates gate dOut deltaState updatedState lastState 
         (deltaX, deltaOut)     = mapT2 (mvmulk deltaGates . transpose) (weightsW, weightsU)
 
         deltaW     = outerProduct deltaGates (fp^.x) 
@@ -205,8 +205,12 @@ algCell2 cell
 
 compGates :: HyperParameters -> [Double] -> [Double] -> Gates
 compGates (weightsW, weightsU, biases) x h 
-    =  V.map (zipWith ($) (replaceElement (replicate 4 sigmoid)  2 tanh )) (eleadd3v (V.map (mvmulk x) weightsW) (V.map (mvmulk h) weightsU) biases)
-
+    -- =  V.map (zipWith ($) (replaceElement (replicate 4 sigmoid)  2 tanh )) (eleadd3v (V.map (mvmulk x) weightsW) (V.map (mvmulk h) weightsU) biases)
+    = let   f = map sigmoid $ eleadd3  (mvmul (weightsW ! 1) x) (mvmul (weightsU ! 1) h) (biases ! 1)
+            i = map sigmoid $ eleadd3  (mvmul (weightsW ! 2) x) (mvmul (weightsU ! 2) h) ( biases  ! 2)
+            o = map sigmoid $ eleadd3  (mvmul (weightsW  ! 4) x) (mvmul (weightsU ! 4) h) ( biases  ! 4)
+            a = map tanh    $ eleadd3  (mvmul (weightsW  ! 3) x) (mvmul (weightsU  ! 3) h) ( biases ! 3)
+      in V.fromList [f,i,a,o]
 compDGates :: Gates -> [Double] -> [Double] -> [Double] -> [Double] -> [Double]
 compDGates gate dOut dState state lastState 
     = let   d_f        = elemul4 dState lastState (gate ! 1) (map sub1 (gate ! 1))
@@ -259,13 +263,13 @@ example =   Fx (Layer (V.fromList [[[0.7]],  [[0.95]],  [[0.45]],   [[0.6]]],
                      V.fromList [[0.15]       , [0.65]         , [0.2]        ,    [0.1]])
                     (Fx (EndCell [0.68381] NoDeltas (Fx (Cell [0] NoDeltas (Fx InputCell))))) (Fx InputLayer))))
 example' =   
-            ( (Layer (V.fromList [[[0.7, 0.45]],  [[0.95, 0.8]],  [[0.45, 0.25]],   [[0.6, 0.4]]],
+            (Fx (Layer (V.fromList [[[0.7, 0.45]],  [[0.95, 0.8]],  [[0.45, 0.25]],   [[0.6, 0.4]]],
                      V.fromList [[[0.1]]      ,  [[0.8]]      ,   [[0.15]]     ,    [[0.25]]],
                      V.fromList [[0.15]       , [0.65]         , [0.2]        ,    [0.1]])
                     (Fx (EndCell [0.0] NoDeltas (Fx (Cell [0] NoDeltas (Fx InputCell))))) (Fx InputLayer)))
 
-runRecurrent = print $ show $ runs example' 
-            -- where sample =  [([1,2],[0.5]),([0.5,3], [1.25])]
+runRecurrent = print $ show $ runs' example' sample
+            where sample =  [([1,2],[0.5]),([0.5,3], [1.25])]
                          
 
 
