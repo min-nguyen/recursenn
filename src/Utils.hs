@@ -186,6 +186,9 @@ replaceElement xs i x =
 sqr :: Fractional a => a -> a
 sqr x = x * x
 
+sqri :: Int -> Int
+sqri x = x * x
+
 sub1 :: Fractional a => a -> a
 sub1 x = 1.0 - x
 

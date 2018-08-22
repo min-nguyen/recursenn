@@ -135,7 +135,13 @@ convoluteDims :: SpatialExtent -> [[[a]]] -> Int -> (Int, Int)
 convoluteDims spatialExtent image stride =
     let (m0, n0, i0, j0)     = (spatialExtent, spatialExtent, 
                                 length $ head image,  length $ head $ head image )
-    in  ((quot (i0 - m0) stride) + 1 , (quot (j0 - n0) stride) + 1 )  
+    in  ((quot (i0 - m0) stride) + 1 , (quot (j0 - n0) stride) + 1 )
+
+convoluteDims2D :: SpatialExtent -> [[a]] -> Int -> (Int, Int)
+convoluteDims2D spatialExtent image stride =
+    let (m0, n0, i0, j0)     = (spatialExtent, spatialExtent, 
+                                length image,  length $ head image )
+    in  (quot (i0 - m0) stride + 1 , quot (j0 - n0) stride + 1 )  
 
 
 -- verified
@@ -152,23 +158,38 @@ flatten_ind image spatialExtent stride =
     in chunksOf (spatialExtent*spatialExtent) (splitVertical image [])
 
 -- verified 
+-- flatten :: [[Double]] -> SpatialExtent -> Stride -> [[Double]]
+-- flatten image spatialExtent stride =
+--     let splitVertical image' stackArray =   
+--                                 if length image' < spatialExtent 
+--                                 then stackArray
+--                                 else (splitHorizontal image' (take spatialExtent image') stackArray)
+--         splitHorizontal image'' imageChunk stack' = case () of 
+--                                 _ | length (head imageChunk) < spatialExtent -> (splitVertical (drop stride image'') stack')
+--                                 _ | otherwise -> let new_stack = (stack' ++ (concat $ map (take spatialExtent) $ take spatialExtent imageChunk))
+--                                                  in  splitHorizontal image'' (map (drop stride) imageChunk) new_stack
+--     in chunksOf (spatialExtent*spatialExtent) (splitVertical image [])
 flatten :: [[Double]] -> SpatialExtent -> Stride -> [[Double]]
 flatten image spatialExtent stride =
-    let splitVertical image' stackArray =   
-                                if length image' < spatialExtent 
-                                then stackArray
-                                else (splitHorizontal image' (take spatialExtent image') stackArray)
-        splitHorizontal image'' imageChunk stack' = case () of 
-                                _ | length (head imageChunk) < spatialExtent -> (splitVertical (drop stride image'') stack')
-                                _ | otherwise -> let new_stack = (stack' ++ (concat $ map (take spatialExtent) $ take spatialExtent imageChunk))
-                                                 in  splitHorizontal image'' (map (drop stride) imageChunk) new_stack
-    in chunksOf (spatialExtent*spatialExtent) (splitVertical image [])
+
+    let splitVert imageV stackArray = 
+                            if length imageV < spatialExtent 
+                            then stackArray
+                            else (splitHori imageV (take spatialExtent imageV) stackArray)
+
+        splitHori imageH imageChunk stack = case () of 
+            _ | length (head imageChunk) < spatialExtent -> (splitVert (drop stride imageH) stack)
+            _ | otherwise ->    let newStack = stack ++ (concat $ map (take spatialExtent) $ take spatialExtent imageChunk)
+                                in splitHori imageH (map (drop stride) imageChunk) newStack
+
+    in chunksOf (sqri spatialExtent) (splitVert image [])
 
 -- verified   
 convolute2D_ind :: [[Double]] -> Image2D -> Stride -> Image2D
 convolute2D_ind filter image stride
-    = let flat_image = flatten_ind image (length filter) stride
-      in  chunksOf (length filter) $ zip (zip [0 ..] [0 ..]) $ map (sum . (zipWith (*) (concat filter)) . (map snd)) flat_image
+    = let (m, n) = convoluteDims2D (length filter) image stride
+          flat_image = flatten_ind image (length filter) stride
+      in  chunksOf (n) $ zip (zip [0 ..] [0 ..]) $ map (sum . zipWith (*) (concat filter) . map snd) flat_image
 
 -- verified
 convolute3D_ind :: Filter -> Image -> Stride -> Image
@@ -177,8 +198,9 @@ convolute3D_ind filter image stride
 
 convolute2D :: [[Double]] -> [[Double]] -> Stride -> [[Double]]
 convolute2D filter image stride
-    = let flat_image = flatten image (length filter) stride
-      in  chunksOf (length filter) $ map (sum . (zipWith (*) (concat filter))) flat_image
+    = let (m, n) = convoluteDims2D (length filter) image stride
+          flat_image = flatten image (length filter) stride
+      in  chunksOf (n) $ map (sum . zipWith (*) (concat filter)) flat_image
 
 -- verified
 convolute3D :: Filter -> [[[Double]]] -> Stride -> [[[Double]]]
