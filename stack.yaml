@@ -1,4 +1,5 @@
-flags: {}
+flags:
+
 packages:
 - .
 extra-deps:

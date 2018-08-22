@@ -43,10 +43,14 @@ cataM phiM = self
     self = phiM <=< (mapM self . unFix)
 
 cata :: Functor f => (f a -> a) -> Fix f -> a
-cata alg = alg . fmap (cata alg) . unFix
+{-# INLINE [0] cata #-}
+cata alg = go
+    where go = alg . fmap (cata alg) . unFix
 
 ana :: Functor f => (a -> f a) -> (a -> Fix f)
-ana coalg = Fx . fmap (ana coalg) . coalg
+{-# INLINE [0] ana #-}
+ana coalg = go
+    where go = Fx . fmap (ana coalg) . coalg
 
 meta :: Functor f => (f a -> a) -> (a -> b) -> (b -> f b) -> (Fix f -> Fix f)
 meta alg e coalg = ana coalg . e . cata alg
@@ -59,13 +63,21 @@ doggo :: Functor f => (f (Fix f, t) -> f (Fix f)) -> (f (Fix f, t) -> t) -> Fix 
 doggo algx algy = app . fmap (doggo algx algy) . unFix
         where app = \k -> (Fx (algx k), algy k)
 
-ella  :: Functor f =>  ((Fix f, t) -> (t -> f (Fix f, t))) -> ((Fix f, t) -> t) -> (Fix f, t) -> Fix f 
-ella  algx algy = Fx . fmap (ella algx algy) . app
+nana  :: Functor f =>  ((Fix f, t) -> (t -> f (Fix f, t))) -> ((Fix f, t) -> t) -> (Fix f, t) -> Fix f 
+nana  algx algy = Fx . fmap (nana algx algy) . app
         where app = \k -> (algx k) (algy k )        
+
+-- (a -> Fix g) . (g a -> a)  <=>  (F (Fix g) -> Fix g)) . (F (a -> Fix g)) Algebra Fusion (10)
+algcomp :: (Functor f, Functor g) => (a -> Fix g) -> (f (Fix g) -> (Fix g)) -> (g a -> a) -> (f a -> a)
+algcomp h phi phi' = (cata phi') . (phi) . (fmap h)
+
+-- (F (g a -> Fix g)) . (a -> g a) <=> (Fix g -> F (Fix g)) . (g a -> Fix g) Algebra Fusion (10)
+coalgcomp :: (Functor f, Functor g) => (Fix g -> a) -> (Fix g -> f (Fix g)) -> (a -> g a) -> (a -> f a)
+coalgcomp h phi phi' = fmap h . phi . ana phi'
 
 ---- |‾| -------------------------------------------------------------- |‾| ----
  --- | |                            NN Tools                            | | ---
-   --- ‾------------------------------------------------------------------‾---
+  --- ‾------------------------------------------------------------------‾---
 
 sigmoid :: Double -> Double
 sigmoid lx = 1.0 / (1.0 + exp (negate lx))
