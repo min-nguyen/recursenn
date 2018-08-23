@@ -30,6 +30,7 @@ import Debug.Trace
 import Control.Lens
 import Data.Maybe
 import Control.Lens.Tuple
+import Types
 ---- |‾| -------------------------------------------------------------- |‾| ----
  --- | |                        Fully Connected NN                      | | ---
   --- ‾------------------------------------------------------------------‾---
@@ -46,8 +47,8 @@ type DesiredOutput      = [Double]
 type FinalOutput        = [Double]
 type Deltas             = [Double]
 
-data Layer k = 
-        Layer   { 
+data FullyConnected f b k = 
+        FullyConnected   { 
                   _weights      :: Weights,
                   _biases       :: Biases,
                   _activation   :: Activation,
@@ -55,7 +56,7 @@ data Layer k =
                   _nextLayer    :: k
                 } 
     |   InputLayer  deriving (Show, Functor, Foldable, Traversable)
-makeLenses ''Layer
+makeLenses ''FullyConnected
 
 data BackPropData   = 
     BackPropData   { 
@@ -70,13 +71,16 @@ makeLenses ''BackPropData
  --- | |                          Alg & Coalg                           | | ---
   --- ‾------------------------------------------------------------------‾---
 
-alg :: Layer (Fix Layer, ([Inputs] -> [Inputs]) ) -> (Fix Layer, ([Inputs] -> [Inputs]))
+type FP = ([Inputs] -> [Inputs])
+type BP = BackPropData
+
+alg :: FullyConnected FP BP (Fix (FullyConnected FP BP), ([Inputs] -> [Inputs]) ) -> (Fix (FullyConnected FP BP), ([Inputs] -> [Inputs]))
 alg InputLayer 
     =  (Fx InputLayer, id)
 alg layer   
     =  (Fx (layer & nextLayer %~ fst), forward layer)
 
-coalg :: (Fix Layer, BackPropData) -> Layer  (Fix Layer, BackPropData)
+coalg :: (Fix (FullyConnected FP BP), BackPropData) -> FullyConnected FP BP  (Fix (FullyConnected FP BP), BackPropData)
 coalg (Fx InputLayer, output)
     =  InputLayer  
 coalg (Fx layer, bp)
@@ -89,6 +93,10 @@ coalg (Fx layer, bp)
                  & nextLayer %~ \x -> (x, bp' & outerWeights .~ (layer ^. weights))
 
 
+instance Layer FullyConnected FP BP where
+    runForward = alg
+    runBackward = coalg
+
 -- ---- |‾| -------------------------------------------------------------- |‾| ----
 --  --- | |                    Forward & Back Propagation                  | | ---
 --   --- ‾------------------------------------------------------------------‾---
@@ -99,8 +107,8 @@ compDelta derivActivation (BackPropData (outputs:inputs:xs) desiredOutput outerD
         in  case outerDeltas of [] -> elemul (zipWith (-) outputs desiredOutput) (map derivActivation z)
                                 _  -> elemul (mvmul (transpose outerWeights) outerDeltas) (map derivActivation z)
 
-forward :: Layer (Fix Layer, ([Inputs] -> [Inputs]) )-> ([Inputs] -> [Inputs])
-forward (Layer weights biases activate activate' (innerLayer, k) )
+forward :: FullyConnected FP BP (Fix (FullyConnected FP BP), ([Inputs] -> [Inputs]) ) -> ([Inputs] -> [Inputs])
+forward (FullyConnected weights biases activate activate' (innerLayer, k) )
     = (\inputs -> (map activate 
         ((zipWith (+) (map ((sum)  . (zipWith (*) (head inputs))) weights) biases))):inputs) . k
 
@@ -112,26 +120,26 @@ backward weights biases BackPropData {_inputStack = (inputs:xs), _outerDeltas = 
           updatedBiases  = zipWith (-) biases (map (learningRate *) updatedDeltas)
       in (updatedWeights, updatedBiases)
 
--- ---- |‾| -------------------------------------------------------------- |‾| ----
---  --- | |                    Running And Constructing NNs                | | ---
---   --- ‾------------------------------------------------------------------‾---
+-- -- ---- |‾| -------------------------------------------------------------- |‾| ----
+-- --  --- | |                    Running And Constructing NNs                | | ---
+-- --   --- ‾------------------------------------------------------------------‾---
 
-train :: Fix Layer -> LossFunction -> Inputs -> DesiredOutput -> Fix Layer 
-train neuralnet lossfunction sample desiredoutput 
+train :: Fix (FullyConnected FP BP) -> Inputs -> DesiredOutput -> Fix (FullyConnected FP BP) 
+train neuralnet sample desiredoutput 
     =  meta alg (\(nn, diff_fun) -> (nn, BackPropData (diff_fun [sample]) desiredoutput [] [[]] )) coalg $ neuralnet
 
-trains :: Fix Layer -> LossFunction -> [Inputs] -> [DesiredOutput] -> Fix Layer
-trains neuralnet lossfunction samples desiredoutputs  
-    = foldr (\(sample, desiredoutput) nn -> train nn lossfunction sample desiredoutput) neuralnet (zip samples desiredoutputs)
+trains :: Fix (FullyConnected FP BP) -> [Inputs] -> [DesiredOutput] -> Fix (FullyConnected FP BP)
+trains neuralnet samples desiredoutputs  
+    = foldr (\(sample, desiredoutput) nn -> train nn sample desiredoutput) neuralnet (zip samples desiredoutputs)
 
-construct :: [(Weights, Biases, Activation, Activation')] -> Fix Layer
-construct (x:xs) = Fx (Layer weights biases activation activation' (construct (xs)))
+construct :: [(Weights, Biases, Activation, Activation')] -> Fix (FullyConnected FP BP)
+construct (x:xs) = Fx (FullyConnected weights biases activation activation' (construct (xs)))
             where (weights, biases, activation, activation') = x
 construct []       = Fx InputLayer
 
 
-example =  (Fx ( Layer [[3.0,6.0,2.0],[2.0,1.0,7.0],[6.0,5.0,2.0]] [0, 0, 0] sigmoid sigmoid'
-            (Fx ( Layer [[4.0,0.5,2.0],[1.0,1.0,2.0],[3.0,0.0,4.0]] [0, 0, 0] sigmoid sigmoid'
+example =  (Fx ( FullyConnected [[3.0,6.0,2.0],[2.0,1.0,7.0],[6.0,5.0,2.0]] [0, 0, 0] sigmoid sigmoid'
+            (Fx ( FullyConnected [[4.0,0.5,2.0],[1.0,1.0,2.0],[3.0,0.0,4.0]] [0, 0, 0] sigmoid sigmoid'
              (Fx   InputLayer ) ) ) ) )
 
-runFullyConnected = print $ show $ train example loss [1.0, 2.0, 0.2] [-26.0, 5.0, 3.0]
+runFullyConnected = print $ show $ train example [1.0, 2.0, 0.2] [-26.0, 5.0, 3.0]

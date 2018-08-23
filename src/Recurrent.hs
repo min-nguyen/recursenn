@@ -32,15 +32,14 @@ import Data.Ord
 import Data.List.Split
 import Text.Show.Functions
 import Debug.Trace
+import Types
+
 
 type State      = [Double]
 type X          = [Double]
 type Label      = [Double]
 type Inputs     = [(X, Label)]
-
---f i a o
-
-type Gates      =  V.Vec4 [Double] 
+type Gates      =  V.Vec4 [Double]      --f i a o
 type Weights    =  V.Vec4 [[Double]] 
 type Biases     =  V.Vec4 [Double] 
 
@@ -68,6 +67,8 @@ data BackProp   = BackProp {
                     } deriving Show
 makeLenses ''BackProp
 
+type FP = Inputs -> [[ForwardProp]]
+type BP = ([[ForwardProp]], BackProp)
 
 data Deltas  = Deltas {
                         deltaW           :: [[Double]],
@@ -90,21 +91,23 @@ data Cell  k =   Cell {
                 | InputCell  deriving (Functor, Show)
 makeLenses ''Cell
 
-data Layer k =  Layer {
+data Recurrent f b k =  Recurrent {
                         _hparams     :: HyperParameters,
                         _cells       :: Fix Cell,
                         _innerLayer  :: k
                     }
                 | InputLayer deriving (Functor, Foldable, Traversable, Show)
-makeLenses ''Layer
+makeLenses ''Recurrent
 
-runLayer :: Fix Layer  -> Inputs -> Fix Layer
-runLayer layer sample = let f = \(layer', forwardProp') -> (layer', forwardProp' sample, (initBackProp 1 2 Nothing Nothing))
+
+
+runLayer :: Fix (Recurrent FP BP)  -> Inputs -> Fix (Recurrent FP BP)
+runLayer layer sample = let f = \(layer', forwardProp') -> (layer', (forwardProp' sample, (initBackProp 1 2 Nothing Nothing)))
                          in  meta algLayer f coalgLayer layer
 
-algLayer :: Layer (Fix Layer, Inputs -> [[ForwardProp]]) -> (Fix Layer, Inputs -> [[ForwardProp]])
+algLayer :: Recurrent FP BP (Fix (Recurrent FP BP), FP) -> (Fix (Recurrent FP BP), FP)
 algLayer InputLayer = (Fx InputLayer, (\sample -> cons [ForwardProp emptyGates [] [] l x [0] emptyParams sample | (x,l) <- sample  ]))
-algLayer (Layer params cells (innerLayer, nextForwardProp))
+algLayer (Recurrent  params cells (innerLayer, nextForwardProp))
     = let forwardProp  = (\fps ->
                     let fp = head fps
                         inputs = map tuplify2 $ chunksOf 2 $ fp <**> [(^.output), (^.label)] 
@@ -113,18 +116,25 @@ algLayer (Layer params cells (innerLayer, nextForwardProp))
                         (cell, fpFunc)     = cata algCell cells 
                         layerFP            = fpFunc [initialForwardProp]
                     in  (layerFP:fps)) . nextForwardProp
-      in (Fx (Layer params cells innerLayer), forwardProp) 
+      in (Fx (Recurrent  params cells innerLayer), forwardProp) 
 
-coalgLayer :: (Fix Layer, [[ForwardProp]], BackProp) -> Layer (Fix Layer, [[ForwardProp]], BackProp)
-coalgLayer (Fx InputLayer, fp, bp)
+coalgLayer :: (Fix (Recurrent FP BP), BP) -> Recurrent FP BP (Fix (Recurrent FP BP), BP)
+coalgLayer (Fx InputLayer, (fp, bp))
     = InputLayer
-coalgLayer (Fx (Layer params cells innerLayer), fps, backProp)
+coalgLayer (Fx (Recurrent params cells innerLayer), (fps, backProp))
     =   let w                   = params^._1
             (hDim, dDim)        = (length $ w ! 1, length $ head $ w ! 1)
             (cell, deltaFunc)   = hylo algCell2 coalgCell (cells, head fps, backProp)
             deltaTotal          = deltaFunc (initDelta hDim dDim)
             backProp'           = initBackProp hDim dDim (Just $ deltaXs deltaTotal) (Just $ w)
-        in  updateParameters (Layer params cell (innerLayer, tail fps, backProp')) deltaTotal
+        in  updateParameters (Recurrent  params cell (innerLayer, (tail fps, backProp'))) deltaTotal
+
+instance Layer Recurrent FP BP where
+    runForward  = algLayer
+    runBackward = coalgLayer
+
+
+
 
 algCell ::  Cell (Fix Cell, [ForwardProp] -> [ForwardProp]) -> (Fix Cell, [ForwardProp] -> [ForwardProp]) -- use forwardprop storing inputs, instead of Inputs?
 algCell InputCell = 
@@ -208,7 +218,7 @@ compDGates gate dOut dState state lastState
             d_o        = elemul4 dOut   (gate ! 4) (map tanh state)  (map sub1 (gate ! 4))
       in    d_f ++ d_i ++ d_a ++ d_o
 
-updateParameters ::  Layer k -> Deltas -> Layer k
+updateParameters ::  Recurrent FP BP k -> Deltas -> Recurrent FP BP k
 updateParameters layer delta_total
     =   let Deltas deltaW_total deltaU_total deltaB_total deltaXs = delta_total
             (weights_w,weights_u,biases) = fromJust $ layer ^? hparams
@@ -235,16 +245,16 @@ initBackProp h d deltaX weights
 initDelta :: Int -> Int -> Deltas
 initDelta h d = Deltas (fillMatrix (4 * h) (d) 0.0) (fillMatrix (4 * h) (h) 0.0) (replicate  (4 * h) 0.0) [[]]
 
-example =   Fx (Layer (V.fromList [[[0.7]],  [[0.95]],  [[0.45]],   [[0.6]]],
+example =   Fx (Recurrent  (V.fromList [[[0.7]],  [[0.95]],  [[0.45]],   [[0.6]]],
                        V.fromList [[[0.1]]      ,  [[0.8]]      ,   [[0.15]]   ,    [[0.25]]],
                        V.fromList [[0.15]       , [0.65]        , [0.2]        ,    [0.1]])
                      (Fx (EndCell [0.68381] NoDeltas (Fx (Cell [0] NoDeltas (Fx InputCell)))))
-            (Fx (Layer (V.fromList [[[0.7, 0.45]],  [[0.95, 0.8]],  [[0.45, 0.25]],   [[0.6, 0.4]]],
+            (Fx (Recurrent  (V.fromList [[[0.7, 0.45]],  [[0.95, 0.8]],  [[0.45, 0.25]],   [[0.6, 0.4]]],
                      V.fromList [[[0.1]]      ,  [[0.8]]      ,   [[0.15]]     ,    [[0.25]]],
                      V.fromList [[0.15]       , [0.65]         , [0.2]        ,    [0.1]])
                     (Fx (EndCell [0.68381] NoDeltas (Fx (Cell [0] NoDeltas (Fx InputCell))))) (Fx InputLayer))))
 example' =   
-            (Fx (Layer (V.fromList [[[0.7, 0.45]],  [[0.95, 0.8]],  [[0.45, 0.25]],   [[0.6, 0.4]]],
+            (Fx (Recurrent  (V.fromList [[[0.7, 0.45]],  [[0.95, 0.8]],  [[0.45, 0.25]],   [[0.6, 0.4]]],
                      V.fromList [[[0.1]]      ,  [[0.8]]      ,   [[0.15]]     ,    [[0.25]]],
                      V.fromList [[0.15]       , [0.65]         , [0.2]        ,    [0.1]])
                     (Fx (EndCell [0.0] NoDeltas (Fx (Cell [0] NoDeltas (Fx InputCell))))) (Fx InputLayer)))
@@ -254,9 +264,9 @@ runRecurrent = print $ show $ runLayer example' sample
                          
 
 
-runCell :: Layer k -> Layer k 
+runCell :: Recurrent FP BP k -> Recurrent FP BP k 
 runCell InputLayer = InputLayer
-runCell (Layer params cells innerLayer)
+runCell (Recurrent params cells innerLayer)
     = let sample = [([1,2],[0.5]),([0.5,3], [1.25])]
           dDim = length . fst $ head sample
           hDim = 1-- let (w,u,b) = params in length $ w ! 1
@@ -271,4 +281,4 @@ runCell (Layer params cells innerLayer)
 
           deltaTotal                = deltaTotalFunc initialDeltaTotal
 
-      in  updateParameters (Layer params cellf innerLayer) deltaTotal
+      in  updateParameters (Recurrent params cellf innerLayer) deltaTotal

@@ -29,18 +29,11 @@ import Debug.Trace
 import Data.List (transpose, elemIndex)
 import Data.Maybe (fromJust)
 import Control.Lens hiding (Index)
+import Types
 ---- |‾| -------------------------------------------------------------- |‾| ----
  --- | |                        Convolutional NN                        | | ---
   --- ‾------------------------------------------------------------------‾---
 
-
-data Layer k where
-    InputLayer              :: Layer k
-    ConvolutionalLayer      :: [Filter] -> [Biases] -> k -> Layer k
-    ReluLayer               :: k -> Layer k 
-    PoolingLayer            :: Stride -> SpatialExtent -> k -> Layer k 
-    FullyConnectedLayer     :: k -> Layer k
-    deriving (Functor, Show)
 
 type Filter             = [[[Double]]]       
 type Index              = (Int, Int)
@@ -52,6 +45,15 @@ type SpatialExtent      = Int
 type Biases             = [Double]
 type Deltas             = [[[Double]]]
 type DesiredOutput      = [[[Double]]]
+
+data Convolutional f b k where
+    InputLayer              :: Convolutional f b k
+    ConvolutionalLayer      :: [Filter] -> [Biases] -> k -> Convolutional f b k
+    ReluLayer               :: k -> Convolutional f b k 
+    PoolingLayer            :: Stride -> SpatialExtent -> k -> Convolutional f b k 
+    FullyConnectedLayer     :: k -> Convolutional f b k
+    deriving (Functor, Show)
+
 data BackPropData       = BackPropData {
                                     imageStack      :: ImageStack,
                                     outerDeltas     :: [Deltas],
@@ -59,12 +61,15 @@ data BackPropData       = BackPropData {
                                     desiredOutput   :: DesiredOutput
                                 }
 
+type FP                 = ImageStack -> ImageStack
+type BP                 = BackPropData
+
 
 ---- |‾| -------------------------------------------------------------- |‾| ----
  --- | |                          Alg & Coalg                           | | ---
   --- ‾------------------------------------------------------------------‾---
 
-alg :: Layer (Fix Layer, (ImageStack -> ImageStack) ) -> (Fix Layer, (ImageStack -> ImageStack))
+alg :: Convolutional FP BP (Fix (Convolutional FP BP), (ImageStack -> ImageStack) ) -> (Fix (Convolutional FP BP), (ImageStack -> ImageStack))
 alg (ConvolutionalLayer filters biases (innerLayer, forwardPass))
         = (Fx (ConvolutionalLayer filters biases innerLayer), (\imageStacks -> 
             let inputVolume = (head imageStacks) 
@@ -81,9 +86,8 @@ alg (InputLayer)
         = (Fx InputLayer, id)
 alg (FullyConnectedLayer (innerLayer, forwardPass)) 
         = (Fx (FullyConnectedLayer innerLayer), id)
-
-
-coalg :: (Fix Layer, BackPropData) -> Layer (Fix Layer, BackPropData )
+ 
+coalg :: (Fix (Convolutional FP BP), BackPropData) -> Convolutional FP BP (Fix (Convolutional FP BP), BackPropData )
 coalg (Fx (FullyConnectedLayer innerLayer), BackPropData imageStack outerDeltas outerFilters desiredOutput)
         =   let actualOutput = (head imageStack)
                 delta       = [ [ [map (0.5 *) (zipWith (-) a d)]  
@@ -109,14 +113,18 @@ coalg (Fx (PoolingLayer stride spatialExtent innerLayer), BackPropData imageStac
             in  (PoolingLayer stride spatialExtent (innerLayer, BackPropData (tail imageStack) delta outerFilters desiredOutput) )
 coalg (Fx (ReluLayer innerLayer), BackPropData imageStack outerDeltas outerFilters desiredOutput)
         =   let input           = head (tail imageStack)
-                delta          = [ convolute3D outerDelta (map3 snd $ transpose3D input) 1
+                delta           = [ convolute3D outerDelta (map3 snd $ transpose3D input) 1
                                     |  outerDelta <- outerDeltas ] :: [Deltas]
             in  (ReluLayer (innerLayer,  BackPropData (tail imageStack) delta outerFilters desiredOutput) )
 coalg  (Fx InputLayer, backPropData)
         =   InputLayer
 
 
-train :: Fix Layer -> Image -> DesiredOutput -> Fix Layer 
+instance Layer Convolutional FP BP where
+    runForward  = alg
+    runBackward = coalg
+
+train :: Fix (Convolutional FP BP) -> Image -> DesiredOutput -> Fix (Convolutional FP BP)
 train neuralnet sample desiredoutput 
     = trace (show $ head inputStack) $ 
         ana coalg $ (nn, BackPropData inputStack [[[[]]]] [[[[]]]] desiredoutput)
@@ -169,6 +177,7 @@ flatten_ind image spatialExtent stride =
 --                                 _ | otherwise -> let new_stack = (stack' ++ (concat $ map (take spatialExtent) $ take spatialExtent imageChunk))
 --                                                  in  splitHorizontal image'' (map (drop stride) imageChunk) new_stack
 --     in chunksOf (spatialExtent*spatialExtent) (splitVertical image [])
+
 flatten :: [[Double]] -> SpatialExtent -> Stride -> [[Double]]
 flatten image spatialExtent stride =
 
@@ -219,15 +228,14 @@ pool :: Stride -> SpatialExtent -> Image2D -> Image2D
 pool stride spatialExtent image = 
     let flat_image = flatten_ind image spatialExtent stride
         image_nums = map2 snd flat_image
-        (h, w)     = (length $ image, length $ head image)
-        (m, n)     = ((quot (h - spatialExtent) stride) + 1 , (quot (w - spatialExtent) stride) + 1 )
+        (m, n)     = convoluteDims2D spatialExtent image stride
         f (x:xs) i =    let max_x = (maximum x)
                             ind = fromJust $ elemIndex max_x x
                             (m', n')    = (quot ind spatialExtent, ind `mod` spatialExtent)
                             (row, col)  = (quot i n, (stride * i) `mod` n)
                         in  (((row + m', col + n'), max_x):(f xs (i + 1)))
         f [] i     = []
-    in  trace (show (m, n) )chunksOf ((quot (length (head image) - spatialExtent) stride) + 1) $ 
+    in  trace (show (m, n) ) chunksOf ((quot (length (head image) - spatialExtent) stride) + 1) $ 
             f image_nums 0
 
 
@@ -241,8 +249,12 @@ unpool (orig_w, orig_h) image =
     in  set' zeros (concat image)
 
 
-
-
+-- pool' :: Stride -> SpatialExtent -> [[[Double]]] -> [[[(Int, Int, Double)]]]
+-- pool' stride spatialExtent image =
+--     let indexedImage = [ [ zip3 (replicate (length $ head image) row) [0 ..]  imageRow  |
+--                                                     (imageRow, row) <- zip image2D [0 ..] ] | image2D <- image]
+--         -- flatImage = flatten image spatialExtent stride
+--     in  indexedImage
 
 
 

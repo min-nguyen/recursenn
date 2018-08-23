@@ -74,28 +74,26 @@ backward' weights biases input final_output
             new_list_weights = transpose $ map (zipWith (+) (map (\xi -> learning_rate * xi * (desired_output - error)) input )) (transpose list_weights)
       in    V.unsafeFromList' $ map V.unsafeFromList' $ new_list_weights
 
-alg' ::     Layer' m n (Layer' n p k, ([Inputs] -> [Inputs]) ) 
+alg ::     Layer' m n (Layer' n p k, ([Inputs] -> [Inputs]))
             -> (Layer' m n (Layer' n p k), ([Inputs] -> [Inputs]))
-alg' (Layer' weights biases activate (innerLayer, forwardPass) )   
+alg (Layer' weights biases activate (innerLayer, forwardPass) )   
     =  (Layer' weights biases activate innerLayer , (forward' weights biases activate forwardPass) )
-alg' (InputLayer' )                     
+alg (InputLayer' )                     
     =  (InputLayer', id )
 
-coalg' ::   (V.SingRep m, V.SingRep n) => 
+coalg ::   (V.SingRep m, V.SingRep n) => 
             (Layer' m n (Layer' n p k), [Inputs]) -> 
              Layer' m n (Layer' n p k, ([Inputs])) 
-coalg' ((Layer' weights biases activate innerLayer), (x:y:ys))
+coalg ((Layer' weights biases activate innerLayer), (x:y:ys))
     =  Layer' (backward' weights biases y x) biases activate (innerLayer, (x:ys))
-coalg' (InputLayer', output)      
+coalg (InputLayer', output)      
     =  InputLayer'
 
 -- catafold = foldr (\(Layer' w b a (i, f)) (Layer' w' b' a' i', f') ->
 --                          (Layer' w' b' a' (alg' i), f' )) (Layer' ((V.Nil):-V.Nil) (V.Nil) sigmoid example') example'
 -- run ::  Layer' m n (Layer' n p k, ([Inputs] -> [Inputs]))
 --         -> (Layer' m n (Layer' n p k), ([Inputs] -> [Inputs]))
--- run (Layer' weights biases activate (innerLayer, forwardPass)) 
---     = let p = alg' $ run innerLayer 
---       in (Layer' weights biases activate p, (forward' weights biases activate forwardPass)) 
+run = alg InputLayer'
 -- run (InputLayer')      
 --     = let p = alg' InputLayer'
 --       in  p
@@ -104,9 +102,8 @@ coalg' (InputLayer', output)
 --   where 
 --     (nn, diff_fun) = cata alg' neuralnet
 
-example' =  ( ( Layer' ((3.0:-10.0:-2.0:-V.Nil):-(3.0:-10.0:-2.0:-V.Nil):-(3.0:-10.0:-2.0:-V.Nil):-V.Nil) (0.0:-0.0:-0.0:-V.Nil) sigmoid
-             ( ( Layer' ((3.0:-1.0:-2.0:-V.Nil):-(3.0:-1.0:-2.0:-V.Nil):-(3.0:-1.0:-2.0:-V.Nil):-V.Nil) (0.0:-0.0:-0.0:-V.Nil) sigmoid
-              (   InputLayer' ) ) ) ) )
+example' =  ( ( Layer' ((3.0:-1.0:-2.0:-V.Nil):-(3.0:-1.0:-2.0:-V.Nil):-(3.0:-1.0:-2.0:-V.Nil):-V.Nil) (0.0:-0.0:-0.0:-V.Nil) sigmoid
+              (   InputLayer' ) ) ) 
 
 
 --------------------------------------------------------
