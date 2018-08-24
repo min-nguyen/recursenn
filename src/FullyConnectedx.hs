@@ -116,13 +116,13 @@ backward weights biases BackPropData {_inputStack = (inputs:xs), _outerDeltas = 
 --  --- | |                    Running And Constructing NNs                | | ---
 --   --- ‾------------------------------------------------------------------‾---
 
-train :: Fix Layer -> LossFunction -> Inputs -> DesiredOutput -> Fix Layer 
-train neuralnet lossfunction sample desiredoutput 
+train :: Fix Layer -> Inputs -> DesiredOutput -> Fix Layer 
+train neuralnet sample desiredoutput 
     =  meta alg (\(nn, diff_fun) -> (nn, BackPropData (diff_fun [sample]) desiredoutput [] [[]] )) coalg $ neuralnet
 
-trains :: Fix Layer -> LossFunction -> [Inputs] -> [DesiredOutput] -> Fix Layer
-trains neuralnet lossfunction samples desiredoutputs  
-    = foldr (\(sample, desiredoutput) nn -> train nn lossfunction sample desiredoutput) neuralnet (zip samples desiredoutputs)
+trains :: Fix Layer -> [Inputs] -> [DesiredOutput] -> Fix Layer
+trains neuralnet samples desiredoutputs  
+    = foldr (\(sample, desiredoutput) nn -> train nn sample desiredoutput) neuralnet (zip samples desiredoutputs)
 
 construct :: [(Weights, Biases, Activation, Activation')] -> Fix Layer
 construct (x:xs) = Fx (Layer weights biases activation activation' (construct (xs)))
@@ -134,4 +134,5 @@ example =  (Fx ( Layer [[3.0,6.0,2.0],[2.0,1.0,7.0],[6.0,5.0,2.0]] [0, 0, 0] sig
             (Fx ( Layer [[4.0,0.5,2.0],[1.0,1.0,2.0],[3.0,0.0,4.0]] [0, 0, 0] sigmoid sigmoid'
              (Fx   InputLayer ) ) ) ) )
 
-runFullyConnected = print $ show $ train example loss [1.0, 2.0, 0.2] [-26.0, 5.0, 3.0]
+runFullyConnected = print $ show $ let nn = train example [1.0, 2.0, 0.2] [-26.0, 5.0, 3.0]
+                                   in nn -- train nn loss [1.0, 2.0, 0.2] [-26.0, 5.0, 3.0]
