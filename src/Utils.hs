@@ -67,6 +67,11 @@ nana  :: Functor f =>  ((Fix f, t) -> (t -> f (Fix f, t))) -> ((Fix f, t) -> t) 
 nana  algx algy = Fx . fmap (nana algx algy) . app
         where app = \k -> (algx k) (algy k )        
 
+-- nana'  :: Functor f =>  ((Fix f, (a -> b)) -> (a -> b -> f (Fix f, b))) -> ((Fix f, a -> b) -> a -> b) 
+--                         -> (Fix f, a -> b) -> (a -> b -> Fix f) 
+-- nana'  algx algy = Fx . fmap (nana algx algy) . app
+--         where app = \k -> (algx k) (algy k )        
+
 -- (a -> Fix g) . (g a -> a)  <=>  (F (Fix g) -> Fix g)) . (F (a -> Fix g)) Algebra Fusion (10)
 algcomp :: (Functor f, Functor g) => (a -> Fix g) -> (f (Fix g) -> (Fix g)) -> (g a -> a) -> (f a -> a)
 algcomp h phi phi' = (cata phi') . (phi) . (fmap h)
