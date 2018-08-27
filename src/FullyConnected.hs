@@ -2,6 +2,7 @@
      DeriveFunctor,
      DeriveFoldable,
      DeriveTraversable,
+     TemplateHaskell, RankNTypes, DeriveFoldable,
      UndecidableInstances,
      FlexibleInstances,
      ScopedTypeVariables,
@@ -26,28 +27,13 @@ import Text.Show.Functions
 import qualified Vector as V
 import Vector (Vector((:-)))
 import Debug.Trace
-
-
+import Control.Lens
+import Data.Maybe
+import Control.Lens.Tuple
 ---- |‾| -------------------------------------------------------------- |‾| ----
  --- | |                        Fully Connected NN                      | | ---
   --- ‾------------------------------------------------------------------‾---
 
-
-data Layer k where
-    Layer       :: Weights -> Biases -> (Activation, Activation') -> k -> Layer k
-    InputLayer  :: Layer k 
-    deriving Show
-
-instance Functor (Layer) where
-    fmap eval (Layer weights biases activate k)      = Layer weights biases activate (eval k) 
-    fmap eval (InputLayer )                          = InputLayer 
-
-data BackPropData       = BackPropData  { 
-                                         inputStack     :: [Inputs],
-                                         desiredOutput  :: DesiredOutput, 
-                                         outerDeltas    :: Deltas, 
-                                         outerWeights   :: Weights
-                                        }
 
 type Weights            = [[Double]]
 type Biases             = [Double]
@@ -60,84 +46,93 @@ type DesiredOutput      = [Double]
 type FinalOutput        = [Double]
 type Deltas             = [Double]
 
+data Layer k = 
+        Layer   { 
+                  _weights      :: Weights,
+                  _biases       :: Biases,
+                  _activation   :: Activation,
+                  _activation'  :: Activation',
+                  _nextLayer    :: k
+                } 
+    |   InputLayer  deriving (Show, Functor, Foldable, Traversable)
+makeLenses ''Layer
+
+data BackPropData   = 
+    BackPropData   { 
+        _inputStack     :: [Inputs],
+        _desiredOutput  :: DesiredOutput, 
+        _outerDeltas    :: Deltas, 
+        _outerWeights   :: Weights
+                    } deriving (Show)
+makeLenses ''BackPropData
 
 ---- |‾| -------------------------------------------------------------- |‾| ----
  --- | |                          Alg & Coalg                           | | ---
   --- ‾------------------------------------------------------------------‾---
 
-algx :: Layer (Fix Layer, ([Inputs] -> [Inputs]) ) -> Layer (Fix Layer)
-algx (Layer weights biases (activate, activate') (innerLayer, forwardPass) )   
-    =  Layer weights biases (activate, activate') innerLayer
-algx InputLayer 
-    =  InputLayer
+alg :: Layer (Fix Layer, ([Inputs] -> [Inputs]) ) -> (Fix Layer, ([Inputs] -> [Inputs]))
+alg InputLayer 
+    =  (Fx InputLayer, id)
+alg layer   
+    =  (Fx (layer & nextLayer %~ fst), forward layer)
 
-algy :: Layer (Fix Layer, ([Inputs] -> [Inputs]) ) -> ([Inputs] -> [Inputs])
-algy (Layer weights biases (activate, _) (innerLayer, forwardPass) )
-    = forward weights biases activate forwardPass   
-algy InputLayer
-    = id
+coalg :: (Fix Layer, BackPropData) -> Layer  (Fix Layer, BackPropData)
+coalg (Fx InputLayer, output)
+    =  InputLayer  
+coalg (Fx layer, bp)
+    =   let delta = compDelta (fromJust $ layer ^? activation') bp
+            bp' =  bp & inputStack  %~ tail 
+                      & outerDeltas .~ delta
+            (newWeights, newBiases) = (backward (layer ^. weights) (layer ^. biases) bp')
+        in layer & weights   .~ newWeights 
+                 & biases    .~ newBiases 
+                 & nextLayer %~ \x -> (x, bp' & outerWeights .~ (layer ^. weights))
 
-coalgx :: (Fix Layer, BackPropData) -> (BackPropData -> Layer  (Fix Layer, BackPropData) )
-coalgx (Fx (Layer weights biases (activate, activate') innerLayer), (BackPropData { inputStack = (output:input:xs), .. }))
-    =  \backPropData -> let (newWeights, newBiases) = (backward weights biases input backPropData)
-                        in Layer newWeights newBiases (activate, activate') (innerLayer, backPropData {outerWeights = weights})
-coalgx (Fx InputLayer, output)
-    =  \_ -> InputLayer 
 
-coalgy :: (Fix Layer, BackPropData) -> BackPropData
-coalgy (Fx (Layer weights biases (activate, activate') innerLayer), backPropData)
-    =   let BackPropData { inputStack = (outputs:inputs:xs), .. } = backPropData
-            delta = compDelta activate' inputs outputs backPropData
-        in  backPropData { inputStack = (inputs:xs), outerDeltas = delta }
-coalgy (Fx InputLayer, backPropData)
-    =   backPropData
+-- ---- |‾| -------------------------------------------------------------- |‾| ----
+--  --- | |                    Forward & Back Propagation                  | | ---
+--   --- ‾------------------------------------------------------------------‾---
 
----- |‾| -------------------------------------------------------------- |‾| ----
- --- | |                    Forward & Back Propagation                  | | ---
-  --- ‾------------------------------------------------------------------‾---
-
-compDelta ::  Activation' -> Inputs -> Outputs -> BackPropData -> Deltas 
-compDelta derivActivation inputs outputs (BackPropData _  desiredOutput outerDeltas outerWeights)   
+compDelta ::  Activation' -> BackPropData -> Deltas 
+compDelta derivActivation (BackPropData (outputs:inputs:xs) desiredOutput outerDeltas outerWeights)   
     =   let z = map inverseSigmoid inputs
         in  case outerDeltas of [] -> elemul (zipWith (-) outputs desiredOutput) (map derivActivation z)
                                 _  -> elemul (mvmul (transpose outerWeights) outerDeltas) (map derivActivation z)
 
-forward :: Weights -> Biases -> Activation -> ([Inputs] -> [Inputs]) -> ([Inputs] -> [Inputs])
-forward weights biases activate k 
-    = (\inputs -> (map activate ((zipWith (+) (map ((sum)  . (zipWith (*) (head inputs))) weights) biases))):inputs) . k
+forward :: Layer (Fix Layer, ([Inputs] -> [Inputs]))-> ([Inputs] -> [Inputs])
+forward (Layer weights biases activate activate' (innerLayer, k) )
+    = (\inputs -> (map activate 
+        ((zipWith (+) (map ((sum)  . (zipWith (*) (head inputs))) weights) biases))):inputs) . k
 
-backward :: Weights -> Biases -> Inputs  -> BackPropData -> (Weights, Biases)
-backward weights biases inputs (BackPropData {outerDeltas = updatedDeltas, ..} )
+backward :: Weights -> Biases  -> BackPropData -> (Weights, Biases)
+backward weights biases BackPropData {_inputStack = (inputs:xs), _outerDeltas = updatedDeltas, ..}
     = let learningRate = 0.2
           inputsDeltasWeights = map (zip3 inputs updatedDeltas) weights
           updatedWeights = [[ w - learningRate*d*i  |  (i, d, w) <- idw_vec ] | idw_vec <- inputsDeltasWeights]                                                  
           updatedBiases  = zipWith (-) biases (map (learningRate *) updatedDeltas)
       in (updatedWeights, updatedBiases)
 
----- |‾| -------------------------------------------------------------- |‾| ----
- --- | |                    Running And Constructing NNs                | | ---
-  --- ‾------------------------------------------------------------------‾---
+-- ---- |‾| -------------------------------------------------------------- |‾| ----
+--  --- | |                    Running And Constructing NNs                | | ---
+--   --- ‾------------------------------------------------------------------‾---
 
-train :: Fix Layer -> LossFunction -> Inputs -> DesiredOutput -> Fix Layer 
-train neuralnet lossfunction sample desiredoutput 
-    = trace (show $ head inputStack) $ 
-        nana coalgx coalgy $ (nn, BackPropData inputStack desiredoutput [] [[]] )
-            where 
-                (nn, diff_fun)      = doggo algx algy neuralnet
-                inputStack   = diff_fun [sample]
+train :: Fix Layer -> Inputs -> DesiredOutput -> Fix Layer 
+train neuralnet sample desiredoutput 
+    =  meta alg (\(nn, diff_fun) -> (nn, BackPropData (diff_fun [sample]) desiredoutput [] [[]] )) coalg $ neuralnet
 
-trains :: Fix Layer -> LossFunction -> [Inputs] -> [DesiredOutput] -> Fix Layer
-trains neuralnet lossfunction samples desiredoutputs  
-    = foldr (\(sample, desiredoutput) nn -> train nn lossfunction sample desiredoutput) neuralnet (zip samples desiredoutputs)
+trains :: Fix Layer -> [Inputs] -> [DesiredOutput] -> Fix Layer
+trains neuralnet samples desiredoutputs  
+    = foldr (\(sample, desiredoutput) nn -> train nn sample desiredoutput) neuralnet (zip samples desiredoutputs)
 
 construct :: [(Weights, Biases, Activation, Activation')] -> Fix Layer
-construct (x:xs) = Fx (Layer weights biases (activation, activation') (construct (xs)))
+construct (x:xs) = Fx (Layer weights biases activation activation' (construct (xs)))
             where (weights, biases, activation, activation') = x
 construct []       = Fx InputLayer
 
 
-example =  (Fx ( Layer [[3.0,6.0,2.0],[2.0,1.0,7.0],[6.0,5.0,2.0]] [0, 0, 0] (sigmoid, sigmoid')
-            (Fx ( Layer [[4.0,0.5,2.0],[1.0,1.0,2.0],[3.0,0.0,4.0]] [0, 0, 0] (sigmoid, sigmoid')
+example =  (Fx ( Layer [[3.0,6.0,2.0],[2.0,1.0,7.0],[6.0,5.0,2.0]] [0, 0, 0] sigmoid sigmoid'
+            (Fx ( Layer [[4.0,0.5,2.0],[1.0,1.0,2.0],[3.0,0.0,4.0]] [0, 0, 0] sigmoid sigmoid'
              (Fx   InputLayer ) ) ) ) )
 
-runFullyConnected = print $ show $ train example loss [1.0, 2.0, 0.2] [-26.0, 5.0, 3.0]
+runFullyConnected = print $ show $ let nn = train example [1.0, 2.0, 0.2] [-26.0, 5.0, 3.0]
+                                   in nn -- train nn loss [1.0, 2.0, 0.2] [-26.0, 5.0, 3.0]
