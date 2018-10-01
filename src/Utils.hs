@@ -30,6 +30,7 @@ type CoAlgebra f a = a -> f a
 
 newtype Fix f = Fx (f (Fix f))
 
+
 instance (Show (f (Fix f))) => Show (Fix f) where
     showsPrec p (Fx x) = showParen (p >= 11) (showString "Fx " . showsPrec 11 x)
 

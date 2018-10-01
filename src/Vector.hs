@@ -16,6 +16,7 @@ import Data.Maybe (fromMaybe)
  --- | |                    Sized Vectors Experiments                   | | ---
   --- ‾------------------------------------------------------------------‾---
 
+
 data Nat = Z | S Nat
 
 -- infixl 6 :+
@@ -158,3 +159,7 @@ instance Nat' Z' where
  
 instance Nat' n => Nat' (S' n) where
    switch _ x = x
+
+class Nat_ (n)
+
+instance Nat_ Nat
