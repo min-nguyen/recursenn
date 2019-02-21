@@ -43,20 +43,4 @@ type DesiredOutput      = [Double]
 type FinalOutput        = [Double]
 type Deltas             = [Double]
 
--- newtype Fox n m f = Fox (V.S' n) (V.S' m) (f (Fox (V.S' m) (V.S' a) ))
-
-data Fox n m f = forall i. V.Nat_ i => Fox n m (f (Fox m i f)) | Term (f (Fox m n f))
-    
-
-data Layer k = 
-        Layer   { 
-                  _weights      :: Weights,
-                  _biases       :: Biases,
-                  _activation   :: Activation,
-                  _activation'  :: Activation',
-                  _nextLayer    :: k
-                } 
-    |   InputLayer  deriving (Show, Functor, Foldable, Traversable)
-
-example :: (V.Nat_ n, V.Nat_ m) => (V.S' n) -> (V.S' m) -> Fox (V.S' n) (V.S' m) Layer
-example n m =  (Fox n m (Layer [[]] [] sigmoid sigmoid' (Term InputLayer ) ))
+data HFix h xs = HRoll {hunroll :: h (HFix h) xs}

@@ -129,10 +129,28 @@ construct (x:xs) = Fx (Layer weights biases activation activation' (construct (x
             where (weights, biases, activation, activation') = x
 construct []       = Fx InputLayer
 
+cataforward neuralnet sample desiredoutput = (snd (cata alg neuralnet)) sample
 
-example =  (Fx ( Layer [[3.0,6.0,2.0],[2.0,1.0,7.0],[6.0,5.0,2.0]] [0, 0, 0] sigmoid sigmoid'
-            (Fx ( Layer [[4.0,0.5,2.0],[1.0,1.0,2.0],[3.0,0.0,4.0]] [0, 0, 0] sigmoid sigmoid'
+example =  (Fx ( Layer [[4.0,0.5,2.0],[1.0,1.0,2.0],[3.0,0.0,4.0]] [0, 0, 0] sigmoid sigmoid'
+            (Fx ( Layer  [[3.0,6.0,2.0],[2.0,1.0,7.0],[6.0,5.0,2.0]] [0, 0, 0] sigmoid sigmoid'
              (Fx   InputLayer ) ) ) ) )
 
-runFullyConnected = print $ show $ let nn = train example [1.0, 2.0, 0.2] [-26.0, 5.0, 3.0]
+runFullyConnected = print $ show $ let nn = (train example [-0.5, 0.2, 0.5] [0.0, 1.0, 0.0]) 
                                    in nn -- train nn loss [1.0, 2.0, 0.2] [-26.0, 5.0, 3.0]
+
+runFullyConnectedForward = cataforward example [[-0.5, 0.2, 0.5]] [0.0, 1.0, 0.0]
+
+-- 0.668187772
+-- 0.937026644
+-- 0.2689414214
+
+-- 0.975377100
+-- 0.895021978
+-- 0.956074004
+
+forward' :: Inputs -> Weights -> Biases -> (Double -> Double) -> Inputs
+forward' inputs weights biases activate = map activate ((zipWith (+) (map ((sum)  . (zipWith (*) (inputs))) weights) biases))
+
+runOneLayer = forward' [-0.5, 0.2, 0.5] [[3.0,6.0,2.0],[2.0,1.0,7.0],[6.0,5.0,2.0]] [0,0,0] sigmoid 
+
+runTwoLayer = forward' [0.668187772, 0.937026644, 0.2689414214] [[4.0,0.5,2.0],[1.0,1.0,2.0],[3.0,0.0,4.0]] [0,0,0] sigmoid 

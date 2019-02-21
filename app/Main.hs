@@ -26,7 +26,7 @@ import Text.Show.Functions
 import qualified Vector as V
 import Vector (Vector((:-)))
 import Debug.Trace
-import Recurrent
+import FullyConnected
 
 
-main = runRecurrent
+main =  print $ show $ inverseSigmoid $ sigmoid 0.5
