@@ -95,9 +95,12 @@ coalg (Fx layer, bp)
 
 compDelta ::  Activation' -> BackPropData -> Deltas 
 compDelta derivActivation (BackPropData (outputs:inputs:xs) desiredOutput outerDeltas outerWeights)   
-    =   let z = map inverseSigmoid inputs
+    =   let z = case xs of []  -> inputs
+                           xss -> map inverseSigmoid inputs
         in  case outerDeltas of [] -> elemul (zipWith (-) outputs desiredOutput) (map derivActivation z)
                                 _  -> elemul (mvmul (transpose outerWeights) outerDeltas) (map derivActivation z)
+
+trydelta = compDelta sigmoid' (BackPropData [[0.975377100, 0.895021978, 0.956074004], [0.668187772, 0.937026644, 0.2689414214]] [0.0, 1.0, 0.0] [] [[4.0,0.5,2.0],[1.0,1.0,2.0],[3.0,0.0,4.0]] )
 
 forward :: Layer (Fix Layer, ([Inputs] -> [Inputs]))-> ([Inputs] -> [Inputs])
 forward (Layer weights biases activate activate' (innerLayer, k) )
@@ -106,7 +109,7 @@ forward (Layer weights biases activate activate' (innerLayer, k) )
 
 backward :: Weights -> Biases  -> BackPropData -> (Weights, Biases)
 backward weights biases BackPropData {_inputStack = (inputs:xs), _outerDeltas = updatedDeltas, ..}
-    = let learningRate = 0.2
+    = let learningRate = 1
           inputsDeltasWeights = map (zip3 inputs updatedDeltas) weights
           updatedWeights = [[ w - learningRate*d*i  |  (i, d, w) <- idw_vec ] | idw_vec <- inputsDeltasWeights]                                                  
           updatedBiases  = zipWith (-) biases (map (learningRate *) updatedDeltas)
@@ -135,6 +138,11 @@ example =  (Fx ( Layer [[4.0,0.5,2.0],[1.0,1.0,2.0],[3.0,0.0,4.0]] [0, 0, 0] sig
             (Fx ( Layer  [[3.0,6.0,2.0],[2.0,1.0,7.0],[6.0,5.0,2.0]] [0, 0, 0] sigmoid sigmoid'
              (Fx   InputLayer ) ) ) ) )
 
+example' =  (Fx ( Layer [[4.0,0.5,2.0],[1.0,1.0,2.0],[3.0,0.0,4.0]] [0, 0, 0] sigmoid sigmoid'
+            (Fx ( Layer  [[3.0,6.0,2.0],[2.0,1.0,7.0],[6.0,5.0,2.0]] [0, 0, 0] sigmoid sigmoid'
+             (Fx   InputLayer ) ) ) ) )
+
+
 runFullyConnected = print $ show $ let nn = (train example [-0.5, 0.2, 0.5] [0.0, 1.0, 0.0]) 
                                    in nn -- train nn loss [1.0, 2.0, 0.2] [-26.0, 5.0, 3.0]
 
@@ -147,6 +155,26 @@ runFullyConnectedForward = cataforward example [[-0.5, 0.2, 0.5]] [0.0, 1.0, 0.0
 -- 0.975377100
 -- 0.895021978
 -- 0.956074004
+
+-- a^L - y
+-- 0.9753771
+-- -0.104978022
+-- 0.956074004
+
+-- z 
+-- 0.69999999924
+-- 2.70000000097
+-- -0.99999999984
+
+-- sigmoid'(z)
+-- 0.24431158873
+-- 0.18050777912
+-- 0.23857267148
+
+-- delta
+-- 0.23829592891186
+-- -0.0189493496076305
+-- 0.0641620733750264
 
 forward' :: Inputs -> Weights -> Biases -> (Double -> Double) -> Inputs
 forward' inputs weights biases activate = map activate ((zipWith (+) (map ((sum)  . (zipWith (*) (inputs))) weights) biases))

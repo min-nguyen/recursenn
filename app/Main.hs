@@ -29,4 +29,4 @@ import Debug.Trace
 import FullyConnected
 
 
-main =  print $ show $ inverseSigmoid $ sigmoid 0.5
+main =  runFullyConnected -- print $ show $ trydelta

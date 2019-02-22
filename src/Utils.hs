@@ -19,6 +19,7 @@ import Prelude
 import Control.Lens hiding (snoc,cons)
 import Text.Show.Functions
 import Control.Monad    hiding (mapM, sequence)
+import Debug.Trace
 -- import qualified Data.Functor.Fixedpoint    as F
 import Data.List (transpose)
 import qualified Data.Vec as V
@@ -89,7 +90,7 @@ sigmoid :: Double -> Double
 sigmoid lx = 1.0 / (1.0 + exp (negate lx))
 
 inverseSigmoid :: Double -> Double
-inverseSigmoid lx = -log((1.0 / lx) - 1.0)
+inverseSigmoid lx = if lx/(1.0-lx) < 0 then trace (show lx ++ " is under 0 ") log(lx/(1.0-lx)) else log(lx/(1.0-lx))
 
 sigmoid' :: Double -> Double
 sigmoid' x = let sig = (sigmoid x) in sig * (1.0 - sig)
