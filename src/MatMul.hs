@@ -15,7 +15,7 @@
      RecordWildCards,
      ExistentialQuantification #-}
 
-module FullyConnected where
+module MatMul where
 
 import Utils
 import Data.Functor     
@@ -26,6 +26,7 @@ import Data.Ord
 import Text.Show.Functions
 import qualified Vector as V
 import Vector (Vector((:-)))
+import           GHC.TypeNats
 import Debug.Trace
 import Control.Lens
 import Data.Maybe
@@ -45,6 +46,22 @@ type LossFunction       = [Double] -> [Double] -> Double
 type DesiredOutput      = [Double]
 type FinalOutput        = [Double]
 type Deltas             = [Double]
+
+-- data Vec (n :: Nat) a = UnsafeMkVec { getVector :: V.Vector a }
+    -- deriving Show
+
+-- data Mat m n k = BaseMat (V.Vector m Double) (V.Vector n Double) 
+--                 | forall p. Mat (V.Vector m Double) (V.Vector n Double) (Fix (k n p))
+--                 -- deriving Show 
+
+-- class Cata f where 
+--     catamap :: (f a -> a) -> Fix f -> a
+
+-- instance Cata (Mat m n) where
+--     catamap f (Fx (BaseMat m n)) = f $ BaseMat m n 
+--     catamap f (Fx (Mat m n k)) = f $ (Mat m n (Fx (fmap f (unFix k))))
+
+-- algMat ::
 
 data Layer k = 
         Layer   { 
@@ -95,12 +112,9 @@ coalg (Fx layer, bp)
 
 compDelta ::  Activation' -> BackPropData -> Deltas 
 compDelta derivActivation (BackPropData (outputs:inputs:xs) desiredOutput outerDeltas outerWeights)   
-    =   let sigmoid'_z = case xs of []  -> inputs  -- we're dealing with the first layer
-                                    xss -> (map derivActivation) (map inverseSigmoid inputs) -- we're dealing with any other layer than the first
-        in  case outerDeltas of [] -> elemul (zipWith (-) outputs desiredOutput) sigmoid'_z -- we're dealing with the layer layer
-                                _  -> elemul (mvmul (transpose outerWeights) outerDeltas) sigmoid'_z -- we're dealing with any other layer than the last
-
-trydelta = compDelta sigmoid' (BackPropData [[0.975377100, 0.895021978, 0.956074004], [0.668187772, 0.937026644, 0.2689414214]] [0.0, 1.0, 0.0] [] [[4.0,0.5,2.0],[1.0,1.0,2.0],[3.0,0.0,4.0]] )
+    =   let z = map inverseSigmoid inputs
+        in  case outerDeltas of [] -> elemul (zipWith (-) outputs desiredOutput) (map derivActivation z)
+                                _  -> elemul (mvmul (transpose outerWeights) outerDeltas) (map derivActivation z)
 
 forward :: Layer (Fix Layer, ([Inputs] -> [Inputs]))-> ([Inputs] -> [Inputs])
 forward (Layer weights biases activate activate' (innerLayer, k) )
@@ -109,7 +123,7 @@ forward (Layer weights biases activate activate' (innerLayer, k) )
 
 backward :: Weights -> Biases  -> BackPropData -> (Weights, Biases)
 backward weights biases BackPropData {_inputStack = (inputs:xs), _outerDeltas = updatedDeltas, ..}
-    = let learningRate = 1
+    = let learningRate = 0.2
           inputsDeltasWeights = map (zip3 inputs updatedDeltas) weights
           updatedWeights = [[ w - learningRate*d*i  |  (i, d, w) <- idw_vec ] | idw_vec <- inputsDeltasWeights]                                                  
           updatedBiases  = zipWith (-) biases (map (learningRate *) updatedDeltas)
@@ -119,15 +133,9 @@ backward weights biases BackPropData {_inputStack = (inputs:xs), _outerDeltas = 
 --  --- | |                    Running And Constructing NNs                | | ---
 --   --- ‾------------------------------------------------------------------‾---
 
--- train :: Fix Layer -> Inputs -> DesiredOutput -> Fix Layer 
--- train neuralnet sample desiredoutput 
---     =  meta alg (\(nn, diff_fun) -> (nn, BackPropData (diff_fun [sample]) desiredoutput [] [[]] )) coalg $ neuralnet
-train :: Fix Layer -> Inputs -> DesiredOutput -> Fix Layer
-train neural_net sample desired_output
-    = meta alg h coalg $ neural_net
-      where h :: (Fix Layer, [Inputs] -> [Inputs]) -> (Fix Layer, BackPropData)
-            h (nn, f) = (nn, BackPropData (f [sample]) desired_output [] [[]])
-
+train :: Fix Layer -> Inputs -> DesiredOutput -> Fix Layer 
+train neuralnet sample desiredoutput 
+    =  meta alg (\(nn, diff_fun) -> (nn, BackPropData (diff_fun [sample]) desiredoutput [] [[]] )) coalg $ neuralnet
 
 trains :: Fix Layer -> [Inputs] -> [DesiredOutput] -> Fix Layer
 trains neuralnet samples desiredoutputs  
@@ -140,52 +148,11 @@ construct []       = Fx InputLayer
 
 cataforward neuralnet sample desiredoutput = (snd (cata alg neuralnet)) sample
 
-
-example =  (Fx ( Layer [[4.0,0.5,2.0],[1.0,1.0,2.0],[3.0,0.0,4.0]] [0, 0, 0] sigmoid sigmoid'
-            (Fx ( Layer  [[3.0,6.0,2.0],[2.0,1.0,7.0],[6.0,5.0,2.0]] [0, 0, 0] sigmoid sigmoid'
+example =  (Fx ( Layer [[3.0,6.0,2.0],[2.0,1.0,7.0],[6.0,5.0,2.0]] [0, 0, 0] sigmoid sigmoid'
+            (Fx ( Layer [[4.0,0.5,2.0],[1.0,1.0,2.0],[3.0,0.0,4.0]] [0, 0, 0] sigmoid sigmoid'
              (Fx   InputLayer ) ) ) ) )
 
-example' =  (Fx ( Layer [[4.0,0.5,2.0],[1.0,1.0,2.0],[3.0,0.0,4.0]] [0, 0, 0] sigmoid sigmoid'
-            (Fx ( Layer  [[3.0,6.0,2.0],[2.0,1.0,7.0],[6.0,5.0,2.0]] [0, 0, 0] sigmoid sigmoid'
-             (Fx   InputLayer ) ) ) ) )
-
-
-runFullyConnected = print $ show $ let nn = (train example [-0.5, 0.2, 0.5] [0.0, 1.0, 0.0]) 
+runFullyConnected = print $ show $ let nn = (snd (cata alg (train example [1.0, 2.0, 0.2] [-26.0, 5.0, 3.0]))) [[1.0, 2.0, 0.2]]
                                    in nn -- train nn loss [1.0, 2.0, 0.2] [-26.0, 5.0, 3.0]
 
-runFullyConnectedForward = cataforward example [[-0.5, 0.2, 0.5]] [0.0, 1.0, 0.0]
-
--- 0.668187772
--- 0.937026644
--- 0.2689414214
-
--- 0.975377100
--- 0.895021978
--- 0.956074004
-
--- a^L - y
--- 0.9753771
--- -0.104978022
--- 0.956074004
-
--- z 
--- 0.69999999924
--- 2.70000000097
--- -0.99999999984
-
--- sigmoid'(z)
--- 0.24431158873
--- 0.18050777912
--- 0.23857267148
-
--- delta
--- 0.23829592891186
--- -0.0189493496076305
--- 0.0641620733750264
-
-forward' :: Inputs -> Weights -> Biases -> (Double -> Double) -> Inputs
-forward' inputs weights biases activate = map activate ((zipWith (+) (map ((sum)  . (zipWith (*) (inputs))) weights) biases))
-
-runOneLayer = forward' [-0.5, 0.2, 0.5] [[3.0,6.0,2.0],[2.0,1.0,7.0],[6.0,5.0,2.0]] [0,0,0] sigmoid 
-
-runTwoLayer = forward' [0.668187772, 0.937026644, 0.2689414214] [[4.0,0.5,2.0],[1.0,1.0,2.0],[3.0,0.0,4.0]] [0,0,0] sigmoid 
+runFullyConnectedForward = cataforward example [[1.0, 2.0, 0.2]] [-26.0, 5.0, 3.0]

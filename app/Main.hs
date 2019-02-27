@@ -26,7 +26,7 @@ import Text.Show.Functions
 import qualified Vector as V
 import Vector (Vector((:-)))
 import Debug.Trace
-import FullyConnected
+import Convolution
+import TestSuite
 
-
-main =  runFullyConnected -- print $ show $ trydelta
+main =  runConvolutionTest
