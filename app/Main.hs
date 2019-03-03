@@ -29,4 +29,4 @@ import Debug.Trace
 import Convolution
 import TestSuite
 
-main =  runConvolutionTest
+main = print $ show $ runConvolutional

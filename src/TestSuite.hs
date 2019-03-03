@@ -36,6 +36,7 @@ runConvolutionTest = do
     testPooling
     testFlatten
     testUnflatten
+    testDeltaFullyConnected
 --     map3 snd (pool 1 2 ( map3 (\x -> ((0,0), x))  [[[ 0.20,  0.60,  0.70, 0.30], 
 --                                                     [-0.1 ,  0.5,   0.25, 0.50], 
 --                                                     [ 0.75, -0.50, -0.80, 0.40], 
@@ -83,7 +84,7 @@ testFlatten = do
                         [[((3,0), 0.3), ((3,1), 0.8), ((3,2), 1.0)], [((4,0), 0.2), ((4,1), 0.2), ((4,2), 1.0)], [((5,0), 0.5), ((5,1), 0.5), ((5,2), 0.5)]],
                         [[((6,0), 0.8), ((6,1), 0.8), ((6,2), 0.12)], [((7,0), 0.8), ((7,1), 0.8), ((7,2), 0.65)], [((8,0), 0.5), ((8,1), 0.5), ((8,2), 0.65)]]]
 
-    print (if flatten image == expectedAnswer then "Flatten Test Correct" else "Flatten Test Failed")
+    print (if flattenImage image == expectedAnswer then "Flatten Test Correct" else "Flatten Test Failed")
 
 testUnflatten :: IO ()
 testUnflatten = do 
@@ -95,5 +96,12 @@ testUnflatten = do
                         [[((3,0), 0.3), ((3,1), 0.8), ((3,2), 1.0)], [((4,0), 0.2), ((4,1), 0.2), ((4,2), 1.0)], [((5,0), 0.5), ((5,1), 0.5), ((5,2), 0.5)]],
                         [[((6,0), 0.8), ((6,1), 0.8), ((6,2), 0.12)], [((7,0), 0.8), ((7,1), 0.8), ((7,2), 0.65)], [((8,0), 0.5), ((8,1), 0.5), ((8,2), 0.65)]]]
 
-    print (if ((unflatten (image) (3, 3 ,3) ) == expectedAnswer) then "Unflatten Test Correct" else "Unflatten Test Failed")
+    print (if ((unflattenImage (image) (3, 3 ,3) ) == expectedAnswer) then "Unflatten Test Correct" else "Unflatten Test Failed")
 
+testDeltaFullyConnected :: IO ()
+testDeltaFullyConnected = do 
+    let outputimage = [[[((0,0), 0.6)]], [[((0,1), 0.7)]], [[((0,2), 0.7)]], [[((1,0), 0.75)]], [[((1,1), 0.5)]], [[((1,2), 0.5)]]]
+        desiredOutput = [[[0.2]],[[0.1]],[[0.7]], [[0.25]], [[0.0]], [[0.63]]]
+        expectedAnswer = [[[ 0.5 * (0.6 - 0.2), 0.5 * (0.7 - 0.1) ]], [[0.5 * (0.7 - 0.7), 0.5 * (0.75 - 0.25)]] , [[0.5 * (0.5 - 0.0), 0.5 * (0.5 - 0.63)]]]
+    
+    print (if compDeltaFullyConnected outputimage desiredOutput (1, 2, 3) == expectedAnswer then "Delta Fully Connected Correct" else "Delta Fully Connected Failed")

@@ -80,7 +80,7 @@ alg (ReluLayer (innerLayer, forwardPass))
 alg (InputLayer) 
         = (Fx InputLayer, id)
 alg (FullyConnectedLayer (innerLayer, forwardPass)) 
-        = (Fx (FullyConnectedLayer innerLayer), (\imageStack -> ((flatten $ head imageStack) : imageStack) ) . forwardPass )
+        = (Fx (FullyConnectedLayer innerLayer), (\imageStack -> ((flattenImage $ head imageStack) : imageStack) ) . forwardPass )
 
 coalg :: (Fix Layer, BackPropData) -> Layer (Fix Layer, BackPropData)
 coalg (Fx (FullyConnectedLayer innerLayer), BackPropData imageStack outerDeltas outerFilters desiredOutput)
@@ -88,26 +88,33 @@ coalg (Fx (FullyConnectedLayer innerLayer), BackPropData imageStack outerDeltas 
         
                 (m, n, v)   = (length (head $ head input), length (head input), length input)
 
-                delta       =  ([ [ [[ (0.5 *) ((snd actOutput2d) - ( desOutput2d))]  ]]
-                                                   |  ([[actOutput2d]], [[desOutput2d]]) <- (zip actualOutput desiredOutput)  ])
+                delta       = [compDeltaFullyConnected actualOutput desiredOutput (m, n, v)] 
+
             in  FullyConnectedLayer (innerLayer, BackPropData (tail imageStack) delta outerFilters desiredOutput)
+
 coalg (Fx (ConvolutionalLayer filters biases innerLayer), BackPropData imageStack outerDeltas outerFilters desiredOutput)
         =   let output          = head imageStack
                 input           = head (tail imageStack)
                 learningRate    = 0.1
-                delta           = [ wTdelta --trace (show wTdelta) (mmmul3d wTdelta (map3 (sigmoid' . snd) output) )
+
+                deltaX          = [ (mmmul3d wTdelta (map3 (sigmoid' . snd) input) )
                                             |  (outerDelta, filter) <- zip outerDeltas filters, 
-                                                let wTdelta = (convolute3D outerDelta  (transpose3D filter) 1)] :: [Deltas]
-                deltaW          = trace (show delta ++ "\n" ++ show filters ++ "\n" ++ show ( outerDeltas)) [ (convolute3D outerDelta (map3 snd $ transpose3D input) 1)
+                                                let wTdelta = (convoluteDeltaX (head outerDelta)  (transpose3D filter) 1)] :: [Deltas]
+
+                deltaW          = [ (convoluteDeltaW (head outerDelta) (map3 (sigmoid' . snd) $ transpose3D input) 1)
                                             |  (outerDelta) <- (outerDeltas)] :: [Deltas]
+
                 newFilters      = [ zipWith elesubm filter (map3 (learningRate *) delta_w) 
                                             | (filter, delta_w) <- (zip filters deltaW) ] 
-            in  ConvolutionalLayer newFilters biases (innerLayer, BackPropData (tail imageStack) delta newFilters desiredOutput)
+                                            
+            in  trace ("Input: " ++ show input ++ "\n Output:" ++ show output ++ "\n Delta:" ++ show deltaX)  $ ConvolutionalLayer newFilters biases (innerLayer, BackPropData (tail imageStack) deltaX newFilters desiredOutput)
+            -- [[[0.0,1.0,1.0],[0.0,1.0,0.0],[0.0,0.0,0.0]]]
 coalg (Fx (PoolingLayer stride spatialExtent innerLayer), BackPropData imageStack outerDeltas outerFilters desiredOutput)
         =   let input           = head (tail imageStack)
                 output          = head imageStack
                 delta           = [[unpool (length $ head input2d, length $ input2d) output2d | (input2d, output2d) <- zip input output  ]]
-            in  trace (show delta) (PoolingLayer stride spatialExtent (innerLayer, BackPropData (tail imageStack) delta outerFilters desiredOutput) )
+            in  (PoolingLayer stride spatialExtent (innerLayer, BackPropData (tail imageStack) delta outerFilters desiredOutput) )
+
 coalg (Fx (ReluLayer innerLayer), BackPropData imageStack outerDeltas outerFilters desiredOutput)
         =   let input           = head (tail imageStack)
                 delta          = [ convolute3D outerDelta (map3 snd $ transpose3D input) 1
@@ -126,15 +133,19 @@ train neuralnet sample desiredoutput
                 inputStack          = diff_fun [sample]
         
 h = map3 (\x -> ((0,0), x))
-
+pad = convoluteDeltaX (head [[[0.5, -0.5], [-0.5, 0.5]], 
+                            [[0.8, 0.8], [-0.8, 0.8]], 
+                            [[1.0, -1.0], [1.0, -1.0]]]) (([[[0.2, 0.6, 0.7,0.3],       [-0.1, 0.5, 0.25, 0.5],  [0.75, -0.5, -0.8, 0.4] , [-0.1, 0.5, 0.25, 0.5]],
+                                                            [[-0.35, 0.3, 0.8, 0.0],    [0.2, 0.2, 0.0, 1.0],    [-0.1, -0.4, -0.1, -0.4], [-0.1, 0.5, 0.25, 0.5]],
+                                                            [[0.25, 0.25, -0.25, -0.25],[0.5, 0.8, 0.12, -0.12], [0.34, -0.34, -0.9, 0.65], [-0.1, 0.5, 0.25, 0.5]]] )) 1
 example = Fx (FullyConnectedLayer (Fx $ PoolingLayer 1 2 (Fx $ ConvolutionalLayer [[[[0.5, -0.5], [-0.5, 0.5]], 
                                                               [[0.8, 0.8], [-0.8, 0.8]], 
                                                               [[1.0, -1.0], [1.0, -1.0]]]] [[0.0]] (Fx $ InputLayer))))
 
 runConvolutional = --head $ map3 (map (\(a, f) -> (a, (fromInteger $ round $ f * (10^2)) / (10.0^^2))) )
                                                              train example (h ([[[0.2, 0.6, 0.7,0.3],       [-0.1, 0.5, 0.25, 0.5],  [0.75, -0.5, -0.8, 0.4] , [-0.1, 0.5, 0.25, 0.5]],
-                                                                                            [[-0.35, 0.3, 0.8, 0.0],    [0.2, 0.2, 0.0, 1.0],    [-0.1, -0.4, -0.1, -0.4], [-0.1, 0.5, 0.25, 0.5]],
-                                                                                            [[0.25, 0.25, -0.25, -0.25],[0.5, 0.8, 0.12, -0.12], [0.34, -0.34, -0.9, 0.65], [-0.1, 0.5, 0.25, 0.5]]] )) [[[0.2]], [[0.0]], [[0.3]], [[-0.2]]]
+                                                                                [[-0.35, 0.3, 0.8, 0.0],    [0.2, 0.2, 0.0, 1.0],    [-0.1, -0.4, -0.1, -0.4], [-0.1, 0.5, 0.25, 0.5]],
+                                                                                [[0.25, 0.25, -0.25, -0.25],[0.5, 0.8, 0.12, -0.12], [0.34, -0.34, -0.9, 0.65], [-0.1, 0.5, 0.25, 0.5]]] )) [[[0.2]], [[0.0]], [[0.3]], [[-0.2]]]
 
 ---- |‾| -------------------------------------------------------------- |‾| ----
  --- | |                    Forward & Back Propagation                  | | ---
@@ -206,6 +217,20 @@ convolute3D :: Filter -> [[[Double]]] -> Stride -> [[[Double]]]
 convolute3D filter image stride
     =  [  convolute2D filter2d image2d stride |  (image2d, filter2d) <- (zip image filter)]
 
+convoluteDeltaW :: [[Double]] -> [[[Double]]] -> Stride -> [[[Double]]]
+convoluteDeltaW delta image stride
+    =  [  convolute2D delta image2d stride |  image2d  <- image ]
+
+
+convoluteDeltaX :: [[Double]] -> [[[Double]]] -> Stride -> [[[Double]]]
+convoluteDeltaX delta image stride
+    =  let (w, h) = (length (head delta) - 1, length delta - 1)
+           padding_w = if w == 0 then [] else [ 0 | x <- [1 .. w]] 
+           padding_h = if h == 0 then [] else [[ 0 | x <- [1 .. (length (head image) + w + w)]] | y <- [1 .. h]  ]
+           padded_image = map (\mat -> if h == 0 then mat else padding_h ++ mat ++ padding_h) . map2 (\row -> padding_w ++ row ++ padding_w) $ image
+       in  [  convolute2D delta image2d stride |  image2d <- padded_image ]
+
+
 -- verified
 forward :: Filter -> Image -> Stride -> Image2D
 forward filter image stride 
@@ -239,15 +264,21 @@ unpool (orig_w, orig_h) image =
         set'  ls []        = ls
     in  set' zeros (concat image)
 
-flatten :: Image -> Image
-flatten image = [ [[(i, d)]] | (i, d) <- (concat $ concat $ image) ]
+flattenImage :: Image -> Image
+flattenImage image = [ [[(i, d)]] | (i, d) <- (concat $ concat $ image) ]
 
-unflatten :: Image -> (Int, Int, Int) -> Image 
-unflatten image (m, n, v) = let image' = concat (concat image)
+unflattenImage :: Image -> (Int, Int, Int) -> Image 
+unflattenImage image (m, n, v) = let image' = concat (concat image)
                             in  chunksOf m $ chunksOf n image'
 
+unflatten :: Deltas -> (Int, Int, Int) -> Deltas 
+unflatten deltas (m, n, v) = let deltas' = concat (concat deltas)
+                            in  chunksOf m $ chunksOf n deltas'
 
 
+compDeltaFullyConnected :: Image -> [[[Double]]] -> (Int, Int, Int) -> Deltas
+compDeltaFullyConnected actualOutput desiredOutput (m, n, v) = 
+    unflatten  (zipWith (\actOutput desOutput -> [[0.5 * ((snd actOutput) - desOutput)]]) (concat $ concat actualOutput) (concat $ concat desiredOutput)) (m, n, v)
 
 
 
