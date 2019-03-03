@@ -80,12 +80,15 @@ alg (ReluLayer (innerLayer, forwardPass))
 alg (InputLayer) 
         = (Fx InputLayer, id)
 alg (FullyConnectedLayer (innerLayer, forwardPass)) 
-        = (Fx (FullyConnectedLayer innerLayer), (\imageStack -> ([ [[(i, d)]] | (i, d) <- (concat $ concat $ head imageStack) ] : imageStack) ) . forwardPass )
+        = (Fx (FullyConnectedLayer innerLayer), (\imageStack -> ((flatten $ head imageStack) : imageStack) ) . forwardPass )
 
 coalg :: (Fix Layer, BackPropData) -> Layer (Fix Layer, BackPropData)
 coalg (Fx (FullyConnectedLayer innerLayer), BackPropData imageStack outerDeltas outerFilters desiredOutput)
-        =   let actualOutput = (head imageStack)
-                delta       =  ([[ [[ (0.5 *) ((snd actOutput2d) - ( desOutput2d))]  ]]
+        =   let (actualOutput:input:_) = (imageStack)
+        
+                (m, n, v)   = (length (head $ head input), length (head input), length input)
+
+                delta       =  ([ [ [[ (0.5 *) ((snd actOutput2d) - ( desOutput2d))]  ]]
                                                    |  ([[actOutput2d]], [[desOutput2d]]) <- (zip actualOutput desiredOutput)  ])
             in  FullyConnectedLayer (innerLayer, BackPropData (tail imageStack) delta outerFilters desiredOutput)
 coalg (Fx (ConvolutionalLayer filters biases innerLayer), BackPropData imageStack outerDeltas outerFilters desiredOutput)
@@ -152,8 +155,8 @@ convoluteDims2D spatialExtent image stride =
 
 
 -- verified
-flatten_ind :: Image2D -> SpatialExtent -> Stride -> Image2D
-flatten_ind image spatialExtent stride =
+convFlatten_ind :: Image2D -> SpatialExtent -> Stride -> Image2D
+convFlatten_ind image spatialExtent stride =
     let splitVertical image' stackArray =   
                                 if length image' < spatialExtent 
                                 then stackArray
@@ -165,8 +168,8 @@ flatten_ind image spatialExtent stride =
     in chunksOf (spatialExtent*spatialExtent) (splitVertical image [])
 
 
-flatten :: [[Double]] -> SpatialExtent -> Stride -> [[Double]]
-flatten image spatialExtent stride =
+convFlatten :: [[Double]] -> SpatialExtent -> Stride -> [[Double]]
+convFlatten image spatialExtent stride =
 
     let splitVert imageV stackArray = 
                             if length imageV < spatialExtent 
@@ -184,7 +187,7 @@ flatten image spatialExtent stride =
 convolute2D_ind :: [[Double]] -> Image2D -> Stride -> Image2D
 convolute2D_ind filter image stride
     = let (m, n) = convoluteDims2D (length filter) image stride
-          flat_image = flatten_ind image (length filter) stride
+          flat_image = convFlatten_ind image (length filter) stride
       in  chunksOf (n) $ zip (zip [0 ..] [0 ..]) $ map (sum . zipWith (*) (concat filter) . map snd) flat_image
 
 -- verified
@@ -195,7 +198,7 @@ convolute3D_ind filter image stride
 convolute2D :: [[Double]] -> [[Double]] -> Stride -> [[Double]]
 convolute2D filter image stride
     = let (m, n) = convoluteDims2D (length filter) image stride
-          flat_image = flatten image (length filter) stride
+          flat_image = convFlatten image (length filter) stride
       in  chunksOf (n) $ map (sum . zipWith (*) (concat filter)) flat_image
 
 -- verified
@@ -213,7 +216,7 @@ forward filter image stride
 -- verified
 pool :: Stride -> SpatialExtent -> Image2D -> Image2D
 pool stride spatialExtent image = 
-    let flat_image = flatten_ind image spatialExtent stride
+    let flat_image = convFlatten_ind image spatialExtent stride
         image_nums = map2 snd flat_image
         (h, w)     = (length $ image, length $ head image)
         (m, n)     = ((quot (h - spatialExtent) stride) + 1 , (quot (w - spatialExtent) stride) + 1 )
@@ -236,9 +239,12 @@ unpool (orig_w, orig_h) image =
         set'  ls []        = ls
     in  set' zeros (concat image)
 
+flatten :: Image -> Image
+flatten image = [ [[(i, d)]] | (i, d) <- (concat $ concat $ image) ]
 
-
-
+unflatten :: Image -> (Int, Int, Int) -> Image 
+unflatten image (m, n, v) = let image' = concat (concat image)
+                            in  chunksOf m $ chunksOf n image'
 
 
 
