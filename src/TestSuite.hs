@@ -102,6 +102,6 @@ testDeltaFullyConnected :: IO ()
 testDeltaFullyConnected = do 
     let outputimage = [[[((0,0), 0.6)]], [[((0,1), 0.7)]], [[((0,2), 0.7)]], [[((1,0), 0.75)]], [[((1,1), 0.5)]], [[((1,2), 0.5)]]]
         desiredOutput = [[[0.2]],[[0.1]],[[0.7]], [[0.25]], [[0.0]], [[0.63]]]
-        expectedAnswer = [[[ 0.5 * (0.6 - 0.2), 0.5 * (0.7 - 0.1) ]], [[0.5 * (0.7 - 0.7), 0.5 * (0.75 - 0.25)]] , [[0.5 * (0.5 - 0.0), 0.5 * (0.5 - 0.63)]]]
+        expectedAnswer = [[[[ 0.5 * (0.6 - 0.2), 0.5 * (0.7 - 0.1) ]], [[0.5 * (0.7 - 0.7), 0.5 * (0.75 - 0.25)]] , [[0.5 * (0.5 - 0.0), 0.5 * (0.5 - 0.63)]]]]
     
     print (if compDeltaFullyConnected outputimage desiredOutput (1, 2, 3) == expectedAnswer then "Delta Fully Connected Correct" else "Delta Fully Connected Failed")

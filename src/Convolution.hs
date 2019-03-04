@@ -106,9 +106,9 @@ coalg (Fx (ConvolutionalLayer filters biases innerLayer), BackPropData imageStac
 
                 newFilters      = [ zipWith elesubm filter (map3 (learningRate *) delta_w) 
                                             | (filter, delta_w) <- (zip filters deltaW) ] 
-                                            
-            in  trace ("Input: " ++ show input ++ "\n Output:" ++ show output ++ "\n Delta:" ++ show deltaX)  $ ConvolutionalLayer newFilters biases (innerLayer, BackPropData (tail imageStack) deltaX newFilters desiredOutput)
-            -- [[[0.0,1.0,1.0],[0.0,1.0,0.0],[0.0,0.0,0.0]]]
+
+            in  trace ("Input: " ++ show input ++ "\n Output:" ++ show output ++ "\n Delta:" ++ show deltaW)  $ ConvolutionalLayer newFilters biases (innerLayer, BackPropData (tail imageStack) deltaX newFilters desiredOutput)
+     
 coalg (Fx (PoolingLayer stride spatialExtent innerLayer), BackPropData imageStack outerDeltas outerFilters desiredOutput)
         =   let input           = head (tail imageStack)
                 output          = head imageStack
@@ -138,9 +138,13 @@ pad = convoluteDeltaX (head [[[0.5, -0.5], [-0.5, 0.5]],
                             [[1.0, -1.0], [1.0, -1.0]]]) (([[[0.2, 0.6, 0.7,0.3],       [-0.1, 0.5, 0.25, 0.5],  [0.75, -0.5, -0.8, 0.4] , [-0.1, 0.5, 0.25, 0.5]],
                                                             [[-0.35, 0.3, 0.8, 0.0],    [0.2, 0.2, 0.0, 1.0],    [-0.1, -0.4, -0.1, -0.4], [-0.1, 0.5, 0.25, 0.5]],
                                                             [[0.25, 0.25, -0.25, -0.25],[0.5, 0.8, 0.12, -0.12], [0.34, -0.34, -0.9, 0.65], [-0.1, 0.5, 0.25, 0.5]]] )) 1
+
 example = Fx (FullyConnectedLayer (Fx $ PoolingLayer 1 2 (Fx $ ConvolutionalLayer [[[[0.5, -0.5], [-0.5, 0.5]], 
-                                                              [[0.8, 0.8], [-0.8, 0.8]], 
-                                                              [[1.0, -1.0], [1.0, -1.0]]]] [[0.0]] (Fx $ InputLayer))))
+                                                                                    [[0.8, 0.8], [-0.8, 0.8]], 
+                                                                                    [[1.0, -1.0], [1.0, -1.0]]], 
+                                                                                   [[[0.2, -0.1], [0.5, 0.5]], 
+                                                                                    [[0.3, -0.8], [-0.1, 0.3]], 
+                                                                                    [[0.0, -0.3], [0.3, -0.4]]]] [[0.0]] (Fx $ InputLayer))))
 
 runConvolutional = --head $ map3 (map (\(a, f) -> (a, (fromInteger $ round $ f * (10^2)) / (10.0^^2))) )
                                                              train example (h ([[[0.2, 0.6, 0.7,0.3],       [-0.1, 0.5, 0.25, 0.5],  [0.75, -0.5, -0.8, 0.4] , [-0.1, 0.5, 0.25, 0.5]],
@@ -271,14 +275,15 @@ unflattenImage :: Image -> (Int, Int, Int) -> Image
 unflattenImage image (m, n, v) = let image' = concat (concat image)
                             in  chunksOf m $ chunksOf n image'
 
-unflatten :: Deltas -> (Int, Int, Int) -> Deltas 
-unflatten deltas (m, n, v) = let deltas' = concat (concat deltas)
-                            in  chunksOf m $ chunksOf n deltas'
+unflatten :: [Double] -> (Int, Int, Int) -> Deltas 
+unflatten flattened_deltas (m, n, v) 
+                        = let deltas' = concat (concat deltas)
+                          in  map (chunksOf m) (chunksOf (m * n) flattened_deltas)
 
 
 compDeltaFullyConnected :: Image -> [[[Double]]] -> (Int, Int, Int) -> Deltas
 compDeltaFullyConnected actualOutput desiredOutput (m, n, v) = 
-    unflatten  (zipWith (\actOutput desOutput -> [[0.5 * ((snd actOutput) - desOutput)]]) (concat $ concat actualOutput) (concat $ concat desiredOutput)) (m, n, v)
+    unflatten  (zipWith (\actOutput desOutput -> 0.5 * ((snd actOutput) - desOutput)) (concat $ concat actualOutput) (concat $ concat desiredOutput)) (m, n, v)
 
 
 
