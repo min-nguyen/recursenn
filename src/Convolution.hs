@@ -88,9 +88,9 @@ coalg (Fx (FullyConnectedLayer innerLayer), BackPropData imageStack outerDeltas 
         
                 (m, n, v)   = (length (head $ head input), length (head input), length input)
 
-                delta       = [compDeltaFullyConnected actualOutput desiredOutput (m, n, v)] 
+                deltas       = compDeltaFullyConnected actualOutput desiredOutput (m, n, v)
 
-            in  FullyConnectedLayer (innerLayer, BackPropData (tail imageStack) delta outerFilters desiredOutput)
+            in trace ("m: " ++ show deltas)  $  FullyConnectedLayer (innerLayer, BackPropData (tail imageStack) deltas outerFilters desiredOutput)
 
 coalg (Fx (ConvolutionalLayer filters biases innerLayer), BackPropData imageStack outerDeltas outerFilters desiredOutput)
         =   let output          = head imageStack
@@ -107,12 +107,12 @@ coalg (Fx (ConvolutionalLayer filters biases innerLayer), BackPropData imageStac
                 newFilters      = [ zipWith elesubm filter (map3 (learningRate *) delta_w) 
                                             | (filter, delta_w) <- (zip filters deltaW) ] 
 
-            in  trace ("Input: " ++ show input ++ "\n Output:" ++ show output ++ "\n Delta:" ++ show deltaW)  $ ConvolutionalLayer newFilters biases (innerLayer, BackPropData (tail imageStack) deltaX newFilters desiredOutput)
+            in  trace ("Input: " ++ show input ++ "\n Output:" ++ show output ++ "\n Delta:" ++ show deltaX)  $ ConvolutionalLayer newFilters biases (innerLayer, BackPropData (tail imageStack) deltaX newFilters desiredOutput)
      
 coalg (Fx (PoolingLayer stride spatialExtent innerLayer), BackPropData imageStack outerDeltas outerFilters desiredOutput)
         =   let input           = head (tail imageStack)
                 output          = head imageStack
-                delta           = [[unpool (length $ head input2d, length $ input2d) output2d | (input2d, output2d) <- zip input output  ]]
+                delta           = [[unpool (length $ head input2d, length $ input2d) output2d] | (input2d, output2d) <- zip input output  ]
             in  (PoolingLayer stride spatialExtent (innerLayer, BackPropData (tail imageStack) delta outerFilters desiredOutput) )
 
 coalg (Fx (ReluLayer innerLayer), BackPropData imageStack outerDeltas outerFilters desiredOutput)
@@ -144,12 +144,13 @@ example = Fx (FullyConnectedLayer (Fx $ PoolingLayer 1 2 (Fx $ ConvolutionalLaye
                                                                                     [[1.0, -1.0], [1.0, -1.0]]], 
                                                                                    [[[0.2, -0.1], [0.5, 0.5]], 
                                                                                     [[0.3, -0.8], [-0.1, 0.3]], 
-                                                                                    [[0.0, -0.3], [0.3, -0.4]]]] [[0.0]] (Fx $ InputLayer))))
+                                                                                    [[0.0, -0.3], [0.3, -0.4]]]] [[0.0], [0.0]] (Fx $ InputLayer))))
 
 runConvolutional = --head $ map3 (map (\(a, f) -> (a, (fromInteger $ round $ f * (10^2)) / (10.0^^2))) )
                                                              train example (h ([[[0.2, 0.6, 0.7,0.3],       [-0.1, 0.5, 0.25, 0.5],  [0.75, -0.5, -0.8, 0.4] , [-0.1, 0.5, 0.25, 0.5]],
                                                                                 [[-0.35, 0.3, 0.8, 0.0],    [0.2, 0.2, 0.0, 1.0],    [-0.1, -0.4, -0.1, -0.4], [-0.1, 0.5, 0.25, 0.5]],
-                                                                                [[0.25, 0.25, -0.25, -0.25],[0.5, 0.8, 0.12, -0.12], [0.34, -0.34, -0.9, 0.65], [-0.1, 0.5, 0.25, 0.5]]] )) [[[0.2]], [[0.0]], [[0.3]], [[-0.2]]]
+                                                                                [[0.25, 0.25, -0.25, -0.25],[0.5, 0.8, 0.12, -0.12], [0.34, -0.34, -0.9, 0.65], [-0.1, 0.5, 0.25, 0.5]]] )) 
+                                                                                [[[0.2]], [[0.0]], [[0.3]], [[-0.2]], [[0.2]], [[0.0]], [[0.3]], [[-0.2]]]
 
 ---- |‾| -------------------------------------------------------------- |‾| ----
  --- | |                    Forward & Back Propagation                  | | ---
@@ -271,17 +272,13 @@ unpool (orig_w, orig_h) image =
 flattenImage :: Image -> Image
 flattenImage image = [ [[(i, d)]] | (i, d) <- (concat $ concat $ image) ]
 
-unflattenImage :: Image -> (Int, Int, Int) -> Image 
-unflattenImage image (m, n, v) = let image' = concat (concat image)
-                            in  chunksOf m $ chunksOf n image'
-
-unflatten :: [Double] -> (Int, Int, Int) -> Deltas 
+unflatten :: [Double] -> (Int, Int, Int) -> [Deltas] 
 unflatten flattened_deltas (m, n, v) 
-                        = let deltas' = concat (concat deltas)
-                          in  map (chunksOf m) (chunksOf (m * n) flattened_deltas)
+                        = --  let deltas' = concat (concat deltas)
+                            trace (show flattened_deltas) $ map (\x -> [x]) $ map (chunksOf m) (chunksOf (m * n) flattened_deltas)
 
 
-compDeltaFullyConnected :: Image -> [[[Double]]] -> (Int, Int, Int) -> Deltas
+compDeltaFullyConnected :: Image -> [[[Double]]] -> (Int, Int, Int) -> [Deltas]
 compDeltaFullyConnected actualOutput desiredOutput (m, n, v) = 
     unflatten  (zipWith (\actOutput desOutput -> 0.5 * ((snd actOutput) - desOutput)) (concat $ concat actualOutput) (concat $ concat desiredOutput)) (m, n, v)
 
