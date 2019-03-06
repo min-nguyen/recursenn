@@ -66,21 +66,29 @@ data BackPropData       = BackPropData {
 
 alg :: Layer (Fix Layer, (ImageStack -> ImageStack) ) -> (Fix Layer, (ImageStack -> ImageStack))
 alg (ConvolutionalLayer filters biases (innerLayer, forwardPass))
-        = (Fx (ConvolutionalLayer filters biases innerLayer), (\imageStacks -> 
-            let inputVolume = (head imageStacks) 
-                stride = 1
-            in  (([map2 (\(a,b) -> (a, sigmoid b)) (forward filter inputVolume 1) | filter <- filters]):imageStacks)) . forwardPass)
+        = (Fx (ConvolutionalLayer filters biases innerLayer), 
+                (\imageStacks -> 
+                    let inputVolume = (head imageStacks) 
+                        stride = 1
+                        outputImage = [map2 (\(a,b) -> (a, sigmoid b)) (forwardConvolutional filter inputVolume 1) | filter <- filters]
+                    in  (outputImage:imageStacks)) . forwardPass)
 alg (PoolingLayer stride spatialExtent (innerLayer, forwardPass))
         = (Fx (PoolingLayer stride spatialExtent innerLayer), 
                 (\imageStack -> 
-                    ((map (pool stride spatialExtent) (head imageStack)):imageStack)) . forwardPass)
+                    let outputImage = (map (pool stride spatialExtent) (head imageStack))
+                    in  (outputImage:imageStack)) . forwardPass)
 alg (ReluLayer (innerLayer, forwardPass))
         = (Fx (ReluLayer innerLayer), 
-                (\imageStacks -> ((map3 (\x -> ((0,0), abs $ snd x)) (head imageStacks)):imageStacks) ) . forwardPass)
+                (\imageStacks -> 
+                    let outputImage = (map3 (\x -> ((0,0), abs $ snd x)) (head imageStacks))
+                    in  (outputImage:imageStacks) ) . forwardPass)
 alg (InputLayer) 
         = (Fx InputLayer, id)
 alg (FullyConnectedLayer (innerLayer, forwardPass)) 
-        = (Fx (FullyConnectedLayer innerLayer), (\imageStack -> ((flattenImage $ head imageStack) : imageStack) ) . forwardPass )
+        = (Fx (FullyConnectedLayer innerLayer), 
+                (\imageStack -> 
+                    let outputImage = (flattenImage $ head imageStack) 
+                    in  (outputImage : imageStack) ) . forwardPass )
 
 coalg :: (Fix Layer, BackPropData) -> Layer (Fix Layer, BackPropData)
 coalg (Fx (FullyConnectedLayer innerLayer), BackPropData imageStack outerDeltas outerFilters desiredOutput)
@@ -90,16 +98,19 @@ coalg (Fx (FullyConnectedLayer innerLayer), BackPropData imageStack outerDeltas 
 
                 deltas       = compDeltaFullyConnected actualOutput desiredOutput (m, n, v)
 
-            in trace ("m: " ++ show deltas)  $  FullyConnectedLayer (innerLayer, BackPropData (tail imageStack) deltas outerFilters desiredOutput)
+            in  FullyConnectedLayer (innerLayer, BackPropData (tail imageStack) deltas outerFilters desiredOutput)
+
+-- deltas are structured like [ [2d delta], [2d delta], ..]
 
 coalg (Fx (ConvolutionalLayer filters biases innerLayer), BackPropData imageStack outerDeltas outerFilters desiredOutput)
         =   let output          = head imageStack
                 input           = head (tail imageStack)
                 learningRate    = 0.1
 
-                deltaX          = [ (mmmul3d wTdelta (map3 (sigmoid' . snd) input) )
-                                            |  (outerDelta, filter) <- zip outerDeltas filters, 
-                                                let wTdelta = (convoluteDeltaX (head outerDelta)  (transpose3D filter) 1)] :: [Deltas]
+                deltaX          = let wTdelta = [ (convoluteDeltaX (head outerDelta)  (transpose3D filter) 1) 
+                                                               |  (outerDelta, filter) <- zip outerDeltas filters] 
+                                      wTdelta' = foldr (\m1 m2 -> sumMat3D m1 m2) (head wTdelta) (tail wTdelta) 
+                                  in  map (\x -> [x]) (mmmul3d wTdelta' (map3 (sigmoid' . snd) input) )
 
                 deltaW          = [ (convoluteDeltaW (head outerDelta) (map3 (sigmoid' . snd) $ transpose3D input) 1)
                                             |  (outerDelta) <- (outerDeltas)] :: [Deltas]
@@ -107,19 +118,19 @@ coalg (Fx (ConvolutionalLayer filters biases innerLayer), BackPropData imageStac
                 newFilters      = [ zipWith elesubm filter (map3 (learningRate *) delta_w) 
                                             | (filter, delta_w) <- (zip filters deltaW) ] 
 
-            in  trace ("Input: " ++ show input ++ "\n Output:" ++ show output ++ "\n Delta:" ++ show deltaX)  $ ConvolutionalLayer newFilters biases (innerLayer, BackPropData (tail imageStack) deltaX newFilters desiredOutput)
+            in  trace (show deltaW) $ ConvolutionalLayer newFilters biases (innerLayer, BackPropData (tail imageStack) deltaX newFilters desiredOutput)
      
 coalg (Fx (PoolingLayer stride spatialExtent innerLayer), BackPropData imageStack outerDeltas outerFilters desiredOutput)
         =   let input           = head (tail imageStack)
                 output          = head imageStack
-                delta           = [[unpool (length $ head input2d, length $ input2d) output2d] | (input2d, output2d) <- zip input output  ]
-            in  (PoolingLayer stride spatialExtent (innerLayer, BackPropData (tail imageStack) delta outerFilters desiredOutput) )
+                deltas           = [[unpool (length $ head input2d, length $ input2d) output2d] | (input2d, output2d) <- zip input output  ]
+            in  (PoolingLayer stride spatialExtent (innerLayer, BackPropData (tail imageStack) deltas outerFilters desiredOutput) )
 
 coalg (Fx (ReluLayer innerLayer), BackPropData imageStack outerDeltas outerFilters desiredOutput)
         =   let input           = head (tail imageStack)
-                delta          = [ convolute3D outerDelta (map3 snd $ transpose3D input) 1
+                deltas          = [ convolute3D outerDelta (map3 snd $ transpose3D input) 1
                                     |  outerDelta <- outerDeltas ] :: [Deltas]
-            in  (ReluLayer (innerLayer,  BackPropData (tail imageStack) delta outerFilters desiredOutput) )
+            in  (ReluLayer (innerLayer,  BackPropData (tail imageStack) deltas outerFilters desiredOutput) )
 coalg  (Fx InputLayer, backPropData)
         =   InputLayer
 
@@ -133,18 +144,23 @@ train neuralnet sample desiredoutput
                 inputStack          = diff_fun [sample]
         
 h = map3 (\x -> ((0,0), x))
+
 pad = convoluteDeltaX (head [[[0.5, -0.5], [-0.5, 0.5]], 
                             [[0.8, 0.8], [-0.8, 0.8]], 
                             [[1.0, -1.0], [1.0, -1.0]]]) (([[[0.2, 0.6, 0.7,0.3],       [-0.1, 0.5, 0.25, 0.5],  [0.75, -0.5, -0.8, 0.4] , [-0.1, 0.5, 0.25, 0.5]],
                                                             [[-0.35, 0.3, 0.8, 0.0],    [0.2, 0.2, 0.0, 1.0],    [-0.1, -0.4, -0.1, -0.4], [-0.1, 0.5, 0.25, 0.5]],
                                                             [[0.25, 0.25, -0.25, -0.25],[0.5, 0.8, 0.12, -0.12], [0.34, -0.34, -0.9, 0.65], [-0.1, 0.5, 0.25, 0.5]]] )) 1
 
-example = Fx (FullyConnectedLayer (Fx $ PoolingLayer 1 2 (Fx $ ConvolutionalLayer [[[[0.5, -0.5], [-0.5, 0.5]], 
-                                                                                    [[0.8, 0.8], [-0.8, 0.8]], 
-                                                                                    [[1.0, -1.0], [1.0, -1.0]]], 
-                                                                                   [[[0.2, -0.1], [0.5, 0.5]], 
-                                                                                    [[0.3, -0.8], [-0.1, 0.3]], 
-                                                                                    [[0.0, -0.3], [0.3, -0.4]]]] [[0.0], [0.0]] (Fx $ InputLayer))))
+example = Fx (FullyConnectedLayer (Fx $ PoolingLayer 1 2 (  Fx $ ConvolutionalLayer [[[[0.5, -0.5], [-0.5, 0.5]], 
+                                                                                      [[0.8, 0.8], [-0.8, 0.8]]], 
+                                                                                     [[[0.2, -0.1], [0.5, 0.5]], 
+                                                                                      [[0.3, -0.8], [-0.1, 0.0]]]] [[0.0], [0.0]]
+                                                         (  Fx $ ConvolutionalLayer [[[[0.5, -0.5], [-0.5, 0.5]], 
+                                                                                      [[0.8, 0.8], [-0.8, 0.8]], 
+                                                                                      [[1.0, -1.0], [1.0, -1.0]]], 
+                                                                                     [[[0.2, -0.1], [0.5, 0.5]], 
+                                                                                      [[0.3, -0.8], [-0.1, 0.3]], 
+                                                                                      [[0.0, -0.3], [0.3, -0.0]]]] [[0.0], [0.0]] (Fx $ InputLayer)))))
 
 runConvolutional = --head $ map3 (map (\(a, f) -> (a, (fromInteger $ round $ f * (10^2)) / (10.0^^2))) )
                                                              train example (h ([[[0.2, 0.6, 0.7,0.3],       [-0.1, 0.5, 0.25, 0.5],  [0.75, -0.5, -0.8, 0.4] , [-0.1, 0.5, 0.25, 0.5]],
@@ -226,7 +242,6 @@ convoluteDeltaW :: [[Double]] -> [[[Double]]] -> Stride -> [[[Double]]]
 convoluteDeltaW delta image stride
     =  [  convolute2D delta image2d stride |  image2d  <- image ]
 
-
 convoluteDeltaX :: [[Double]] -> [[[Double]]] -> Stride -> [[[Double]]]
 convoluteDeltaX delta image stride
     =  let (w, h) = (length (head delta) - 1, length delta - 1)
@@ -237,8 +252,8 @@ convoluteDeltaX delta image stride
 
 
 -- verified
-forward :: Filter -> Image -> Stride -> Image2D
-forward filter image stride 
+forwardConvolutional :: Filter -> Image -> Stride -> Image2D
+forwardConvolutional filter image stride 
     = let (m, n)             = convoluteDims (length $ head filter) image stride 
           bias  = 1.0
       in  map (( zip (zip [0 ..] [0 ..]) ) . (map (bias + ))) $ foldr eleaddm (fillMatrix m n 0.0) (map3 snd $ convolute3D_ind filter image stride)
@@ -259,7 +274,6 @@ pool stride spatialExtent image =
     in  trace (show (m, n) )chunksOf ((quot (length (head image) - spatialExtent) stride) + 1) $ 
             f image_nums 0
 
-
 -- verified
 unpool :: (Int, Int) -> Image2D -> [[Double]]
 unpool (orig_w, orig_h) image = 
@@ -272,16 +286,14 @@ unpool (orig_w, orig_h) image =
 flattenImage :: Image -> Image
 flattenImage image = [ [[(i, d)]] | (i, d) <- (concat $ concat $ image) ]
 
-unflatten :: [Double] -> (Int, Int, Int) -> [Deltas] 
-unflatten flattened_deltas (m, n, v) 
-                        = --  let deltas' = concat (concat deltas)
-                            trace (show flattened_deltas) $ map (\x -> [x]) $ map (chunksOf m) (chunksOf (m * n) flattened_deltas)
-
 
 compDeltaFullyConnected :: Image -> [[[Double]]] -> (Int, Int, Int) -> [Deltas]
 compDeltaFullyConnected actualOutput desiredOutput (m, n, v) = 
     unflatten  (zipWith (\actOutput desOutput -> 0.5 * ((snd actOutput) - desOutput)) (concat $ concat actualOutput) (concat $ concat desiredOutput)) (m, n, v)
-
+    where   unflatten :: [Double] -> (Int, Int, Int) -> [Deltas] 
+            unflatten flattened_deltas (m, n, v) 
+                                = map (\x -> [x]) $ map (chunksOf m) (chunksOf (m * n) flattened_deltas)
+        
 
 
 

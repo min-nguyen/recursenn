@@ -28,6 +28,8 @@ dependencies:
 - monomorphic
 - transformers
 - recursion-schemes
+- align
+- these
 - singletons
 - split
 - lens

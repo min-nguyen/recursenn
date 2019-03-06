@@ -8,5 +8,6 @@ extra-deps:
 - monomorphic-0.0.3.3
 - natural-0.1.0.1
 - nat-0.3
+- align-0.1.1.2
 - Vec-1.0.5
 resolver: lts-12.4

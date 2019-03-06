@@ -20,6 +20,8 @@ import Control.Lens hiding (snoc,cons)
 import Text.Show.Functions
 import Control.Monad    hiding (mapM, sequence)
 import Debug.Trace
+import Data.Maybe
+import Data.These
 -- import qualified Data.Functor.Fixedpoint    as F
 import Data.List (transpose)
 import qualified Data.Vec as V
@@ -237,3 +239,12 @@ tuplify3 [x,y,z] = (x,y,z)
 
 tuplify4 :: [a] -> (a,a,a,a)
 tuplify4 (t:x:y:z:_) = (t,x,y,z)
+
+sumMat3D :: [[[Double]]] -> [[[Double]]] -> [[[Double]]]
+sumMat3D m n = if null m then n else if null n then m else 
+                    (zipWith (\xs ys -> 
+                        if null xs then ys else if null ys then xs else
+                            (zipWith (\as bs -> 
+                                if null as then bs else if null bs then as else
+                                     (zipWith (+) as bs))) xs ys)) m n
+
