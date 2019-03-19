@@ -105,7 +105,7 @@ alg (FullyConnectedLayer (innerLayer, forwardPass))
         = (Fx (FullyConnectedLayer innerLayer), 
                 (\fps -> 
                     let inputImage  = (head fps) ^. image 
-                        outputImage = (flattenImage $ inputImage) 
+                        outputImage =  (flattenImage $ inputImage) 
                         output = (head fps) & image .~ outputImage
                     in  (output : fps) ) . forwardPass )
 
@@ -117,12 +117,12 @@ coalg (Fx (FullyConnectedLayer innerLayer), BackProp fps outerDeltas outerFilter
 
                 deltas       = compDeltaFullyConnected outputImage desiredOutput (m, n, v)
 
-            in  FullyConnectedLayer (innerLayer, BackProp (tail fps) deltas outerFilters desiredOutput)
+            in  trace (show $ head $ head $ head deltas) $ FullyConnectedLayer (innerLayer, BackProp (tail fps) deltas outerFilters desiredOutput)
 
 coalg (Fx (ConvolutionalLayer filters biases innerLayer), BackProp fps outerDeltas outerFilters desiredOutput)
         =   let (output:input:_) = fps
                 (outputImage, inputImage) = (output ^. image,  input ^. image)
-                learningRate    = 0.1
+                learningRate    = 0.02
 
                 deltaX          = let wTdelta = [ (convoluteDeltaX (outerDelta)  (transpose3D filter) 1) 
                                                                |  (outerDelta, filter) <- zip outerDeltas filters] 
@@ -158,6 +158,14 @@ train neuralnet sample desiredoutput
                 (nn, diff_fun)      = cata alg neuralnet
                 inputStack          = diff_fun [sample]
 
+
+trains :: Fix Layer -> [Image] -> [DesiredOutput] -> Fix Layer
+trains neuralnet samples desiredoutputs  
+    = foldr (\(sample, desiredoutput) nn -> 
+                  let updatedNetwork = train nn (ForwardProp sample [[[]]]) desiredoutput
+                  in  updatedNetwork) neuralnet (zip samples desiredoutputs)
+
+
 pad = convoluteDeltaX (head [[[0.5, -0.5], [-0.5, 0.5]], 
                             [[0.8, 0.8], [-0.8, 0.8]], 
                             [[1.0, -1.0], [1.0, -1.0]]]) (([[[0.2, 0.6, 0.7,0.3],       [-0.1, 0.5, 0.25, 0.5],  [0.75, -0.5, -0.8, 0.4] , [-0.1, 0.5, 0.25, 0.5]],
@@ -175,11 +183,50 @@ example = Fx (FullyConnectedLayer (Fx $ PoolingLayer 1 2 (  Fx $ ConvolutionalLa
                                                                                       [[0.3, -0.8], [-0.1, 0.3]], 
                                                                                       [[0.0, -0.3], [0.3, -0.0]]]] [[0.0], [0.0]] (Fx $ InputLayer)))))
 
+neuralnet = Fx (FullyConnectedLayer  (  Fx $ ConvolutionalLayer [--[[[1, 2, 1], [0, 0, 0], [-1,-2,-1]], 
+                                                                   --[[1, 0,-1], [2, 0, 2], [1, 0,-1]], 
+                                                                   --[[1, 1, 1], [0, 0, 0], [-1,-1,-1]],
+                                                                   --[[1, 0,-1], [1, 0,-1], [1, 0,-1]]],
+                                                                  [[[0,-0.3,-0.6], [0.3, 0,-0.3], [0.6, 0.3, 0]],
+                                                                   [[-0.6,-0.3,0], [-0.3,0,-0.6], [0, 0.3, 0.6]],
+                                                                   [[0, 0.3, 0.6], [-0.6,0, 0.3], [-0.6,-0.3,0]],
+                                                                   [[0.6, 0.3, 0], [0.3, 0,-0.3], [0,-0.3,-0.6]]]]
+                                                                   [[0.0]]
+                                                                   (Fx $ PoolingLayer 1 3 
+                                                                          (Fx $ ConvolutionalLayer [ [[[-0.3,-0.6,-0.3],[0, 0,0],[0.3,0.6,0.3]]],
+                                                                                                     [[[-0.3, 0, 0.3],[-0.6,0,0.6],[-0.3,0, 0.3]]],
+                                                                                                     [[[0, 0.3, 0.6], [-0.3,0,0.3],[-0.6,-0.3,0]]],
+                                                                                                     [[[0.6, 0.3, 0], [0.3,0,-0.3],[0,-0.3,-0.6]]] ]
+                                                                                                    [[0.0],[0.0],[0.0],[0.0]]
+                                                                                                    (Fx $ InputLayer)))))
+testdata_x =  [[[ 0.5,-0.5,-0.5,-0.5,-0.5,-0.5, 0.5],
+                [-0.5, 0.5,-0.5,-0.5,-0.5, 0.5,-0.5],
+                [-0.5,-0.5, 0.5,-0.5, 0.5,-0.5,-0.5],
+                [-0.5,-0.5,-0.5, 0.5,-0.5,-0.5,-0.5],
+                [-0.5,-0.5, 0.5,-0.5, 0.5,-0.5,-0.5],
+                [-0.5, 0.5,-0.5,-0.5,-0.5, 0.5,-0.5],
+                [ 0.5,-0.5,-0.5,-0.5,-0.5,-0.5, 0.5]]]
+
+testdata_o = [[ [-0.5,-0.5,-0.5,-0.5,-0.5,-0.5,-0.5],
+                [-0.5, 0.5, 0.5, 0.5, 0.5,-0.5,-0.5],
+                [-0.5, 0.5,-0.5,-0.5, 0.5,-0.5,-0.5],
+                [-0.5, 0.5,-0.5,-0.5, 0.5,-0.5,-0.5],
+                [-0.5, 0.5,-0.5,-0.5, 0.5,-0.5,-0.5],
+                [-0.5, 0.5, 0.5, 0.5, 0.5,-0.5,-0.5],
+                [-0.5,-0.5,-0.5,-0.5,-0.5,-0.5,-0.5]]]
+
+testlabels = [[[1.0]]]
+
+runConvolutionalV3 inputs desiredoutputs = trains neuralnet inputs desiredoutputs
+
+runConvolutionalV2 = train (train neuralnet (ForwardProp testdata_o [[[]]]) testlabels) (ForwardProp testdata_x [[[]]]) [[[0.0]]]
+
+
 runConvolutional = --head $ map3 (map (\(a, f) -> (a, (fromInteger $ round $ f * (10^2)) / (10.0^^2))) )
                                                              train example (ForwardProp 
                                                                                (  ([[[0.2, 0.6, 0.7,0.3],       [-0.1, 0.5, 0.25, 0.5],  [0.75, -0.5, -0.8, 0.4] , [-0.1, 0.5, 0.25, 0.5]],
                                                                                     [[-0.35, 0.3, 0.8, 0.0],    [0.2, 0.2, 0.0, 1.0],    [-0.1, -0.4, -0.1, -0.4], [-0.1, 0.5, 0.25, 0.5]],
-                                                                                    [[0.25, 0.25, -0.25, -0.25],[0.5, 0.8, 0.12, -0.12], [0.34, -0.34, -0.9, 0.65], [-0.1, 0.5, 0.25, 0.5]]] )) [[]])
+                                                                                    [[0.25, 0.25, -0.25, -0.25],[0.5, 0.8, 0.12, -0.12], [0.34, -0.34, -0.9, 0.65], [-0.1, 0.5, 0.25, 0.5]]] )) [[[]]])
                                                                                     [[[0.2]], [[0.0]], [[0.3]], [[-0.2]], [[0.2]], [[0.0]], [[0.3]], [[-0.2]]]
 
 ---- |‾| -------------------------------------------------------------- |‾| ----

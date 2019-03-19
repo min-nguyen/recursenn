@@ -23,16 +23,19 @@ import Data.Functor
 import Data.Foldable
 import Data.Traversable
 import Data.List
+import Data.List.Split
 import Data.Ord
+import Text.Read
 import Text.Show.Functions
 import qualified Vector as V
 import Vector (Vector((:-)))
 import Debug.Trace
-import FullyConnected2
+import Convolution
 import TestSuite
 
 main = do 
-     readShiftRight
+     
+     readDataConv
      -- inputFile <- readFile "sine_data"
      -- outputFile <- readFile "sine_outputs"
      -- let inputlines = lines inputFile
@@ -45,7 +48,23 @@ main = do
      --print $ show $ runConvolutional
 
 
-makeData = do 
+readDataConv = do 
+     inputFile <- readFile "conv_data"
+     outputFile <- readFile "conv_output"
+     let  inputlines = lines inputFile 
+          outputlines = lines outputFile
+          -- print $ map length ((map2 read (map (splitOn ",") inputlines)) ::  [[Double]])
+          input = map (\x -> [x]) $ map (chunksOf 7) ((map2 read (map (splitOn ",") inputlines)) ::  [[Double]])
+     --      input = map (chunksOf 5) $ map2 read $ map (splitOn ",") inputlines 
+          output = map ((\x -> [[[x]]]) . read)  outputlines
+
+          nn = runConvolutionalV3 input output
+     print $ show nn 
+     -- print $ input
+     -- print $ output
+     -- print $ show input
+
+makeDataFC = do 
      args <- getArgs
      content <- readFile (args !! 0)
      let linesOfFiles = lines content
