@@ -119,8 +119,6 @@ coalg (Fx (FullyConnectedLayer innerLayer), BackProp fps outerDeltas outerFilter
 
             in  FullyConnectedLayer (innerLayer, BackProp (tail fps) deltas outerFilters desiredOutput)
 
--- deltas are structured like [ [2d delta], [2d delta], ..]
-
 coalg (Fx (ConvolutionalLayer filters biases innerLayer), BackProp fps outerDeltas outerFilters desiredOutput)
         =   let (output:input:_) = fps
                 (outputImage, inputImage) = (output ^. image,  input ^. image)

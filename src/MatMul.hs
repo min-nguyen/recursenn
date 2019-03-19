@@ -152,7 +152,7 @@ example =  (Fx ( Layer [[3.0,6.0,2.0],[2.0,1.0,7.0],[6.0,5.0,2.0]] [0, 0, 0] sig
             (Fx ( Layer [[4.0,0.5,2.0],[1.0,1.0,2.0],[3.0,0.0,4.0]] [0, 0, 0] sigmoid sigmoid'
              (Fx   InputLayer ) ) ) ) )
 
-runFullyConnected = print $ show $ let nn = (snd (cata alg (train example [1.0, 2.0, 0.2] [-26.0, 5.0, 3.0]))) [[1.0, 2.0, 0.2]]
+runFullyConnected = print $ show $ let nn = (snd (cata alg (train example [-0.5, 0.2, 0.5] [-26.0, 5.0, 3.0]))) [[1.0, 2.0, 0.2]]
                                    in nn -- train nn loss [1.0, 2.0, 0.2] [-26.0, 5.0, 3.0]
 
 runFullyConnectedForward = cataforward example [[1.0, 2.0, 0.2]] [-26.0, 5.0, 3.0]

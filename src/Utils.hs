@@ -16,6 +16,7 @@
 
 module Utils where
 import Prelude
+import Numeric 
 import Control.Lens hiding (snoc,cons)
 import Text.Show.Functions
 import Control.Monad    hiding (mapM, sequence)
@@ -125,6 +126,9 @@ mvmul mat vec = map (sum . (zipWith (*) vec)) mat
 
 mvmulk :: Num a => [a] -> [[a]] -> [a]
 mvmulk vec mat = map (sum . (zipWith (*) vec)) mat
+
+outerproduct :: Num a => [a] -> [a] -> [[a]]
+outerproduct v1 v2 = [ (map (v1_element *) v2) | v1_element <- v1   ]
 
 -- mvmulkf :: (Num a, F.FixedList f) => [a] -> f [[a]] -> f [a]
 -- mvmulkf vec mat = map (sum . (zipWith (*) vec)) mat
@@ -248,3 +252,5 @@ sumMat3D m n = if null m then n else if null n then m else
                                 if null as then bs else if null bs then as else
                                      (zipWith (+) as bs))) xs ys)) m n
 
+
+formatFloatN floatNum numOfDecimals = showFFloat (Just numOfDecimals) floatNum ""
