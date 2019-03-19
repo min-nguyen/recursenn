@@ -85,7 +85,7 @@ coalg (Fx layer, bp)
             bp' =  bp & inputStack  %~ tail 
                       & outerDeltas .~ delta
             (newWeights, newBiases) = (backward (layer ^. weights) (layer ^. biases) bp')
-        in trace (show delta) $
+        in 
             layer & weights   .~ newWeights 
                  & biases    .~ newBiases 
                  & nextLayer %~ \x -> (x, bp' & outerWeights .~ (layer ^. weights))
@@ -97,9 +97,9 @@ coalg (Fx layer, bp)
 
 compDelta ::  Activation' -> PropData -> Deltas 
 compDelta derivActivation (PropData fp (outputs:inputs:xs) desiredOutput outerDeltas outerWeights)   
-    =   let sigmoid'_z = case xs of --[]  -> inputs  -- we're dealing with the first layer
-                                    xss -> (map derivActivation) (map inverseSigmoid inputs) -- we're dealing with any other layer than the first
-        in  case outerDeltas of [] -> elemul (zipWith (-) outputs desiredOutput) sigmoid'_z -- we're dealing with the last layer
+    =   let sigmoid'_z = (map derivActivation) (map inverseSigmoid inputs) 
+        in  case outerDeltas of [] -> let cost = elemul (zipWith (-) outputs desiredOutput) sigmoid'_z -- we're dealing with the last layer
+                                      in  trace (show $ head (zipWith (-) outputs desiredOutput)) cost
                                 _  -> elemul (mvmul (transpose outerWeights) outerDeltas) sigmoid'_z -- we're dealing with any other layer than the last
 
 trydelta = compDelta sigmoid' (PropData id [[0.975377100, 0.895021978, 0.956074004], [0.668187772, 0.937026644, 0.2689414214]] [0.0, 1.0, 0.0] [] [[4.0,0.5,2.0],[1.0,1.0,2.0],[3.0,0.0,4.0]] )
@@ -109,17 +109,18 @@ forward (Layer weights biases activate activate' (innerLayer, propData) )
     = propData & forwardPass .~ f
       where fp = propData ^. forwardPass
             f = ((\inputs -> (map activate 
-                    ((map ((sum)  . (zipWith (*) (head inputs))) weights) )):inputs) . fp)
+                    (zipWith (+) (map ((sum)  . (zipWith (*) (head inputs))) weights) biases)):inputs) . fp)
 forward (InputLayer) = PropData f [[]] [] [] [[]]
     where f = (\(inputs:_) -> (inputs:inputs:[]))
 
 backward :: Weights -> Biases  -> PropData -> (Weights, Biases)
 backward weights biases PropData {_inputStack = (inputs:prev_inputs:xs), _outerDeltas = updatedDeltas, ..}
-    = let learningRate = 1
+    = let learningRate = 2
           weightGradient = transpose $ map2 (\x -> learningRate * x) (outerproduct prev_inputs updatedDeltas)
           updatedWeights = elesubm weights weightGradient --[[ w - learningRate*d*i  |  (i, d, w) <- idw_vec ] | idw_vec <- inputsDeltasWeights]                                                  
           updatedBiases  = zipWith (-) biases (map (learningRate *) updatedDeltas)
-      in  trace ("Updated deltas: " ++ show updatedDeltas ++ " weights : " ++ show weightGradient) (updatedWeights, updatedBiases)
+      in  --trace ("Updated deltas: " ++ show updatedDeltas ++ " weights : " ++ show weightGradient) 
+          (updatedWeights, updatedBiases)
 
 -- ---- |‾| -------------------------------------------------------------- |‾| ----
 --  --- | |                    Running And Constructing NNs                | | ---
@@ -139,7 +140,7 @@ trains :: Fix Layer -> [Inputs] -> [DesiredOutput] -> Fix Layer
 trains neuralnet samples desiredoutputs  
     = foldr (\(sample, desiredoutput) nn -> 
                   let updatedNetwork = train nn sample desiredoutput
-                  in  deforest updatedNetwork) neuralnet (zip samples desiredoutputs)
+                  in   updatedNetwork) neuralnet (zip samples desiredoutputs)
 
 deforest :: Fix Layer -> Fix Layer 
 deforest nn = meta deforestCata g deforestAna $  nn
@@ -166,9 +167,9 @@ construct []       = Fx InputLayer
 -- cataforward neuralnet sample desiredoutput = (snd (cata alg neuralnet)) sample
 
 
-example =  (Fx ( Layer [[4.0, 1.0, 3.0]] [0, 0, 0] sigmoid sigmoid'
-            (Fx ( Layer  [[3.0,6.0,2.0],[2.0,1.0,7.0],[6.0,5.0,2.0]] [0, 0, 0] sigmoid sigmoid'
-            (Fx ( Layer  [[3.0,6.0,2.0],[2.0,1.0,7.0],[6.0,5.0,2.0]] [0, 0, 0] sigmoid sigmoid'
+example =  (Fx ( Layer [[0.4, 0.1, 0.3]] [0, 0, 0] sigmoid sigmoid'
+            (Fx ( Layer  [[0.1,0.2,0.5],[0.4,0.2,0.4],[0.3,0.8,0.12]] [0, 0, 0] sigmoid sigmoid'
+            (Fx ( Layer  [[0.3,0.6,0.15],[0.2,0.1,0.7],[0.6,0.5,0.2]] [0, 0, 0] sigmoid sigmoid'
              (Fx   InputLayer ) ) ) ) )))
 
 example' =  (Fx ( Layer [[4.0,0.5,2.0],[1.0,1.0,2.0],[3.0,0.0,4.0]] [0, 0, 0] sigmoid sigmoid'
@@ -181,7 +182,7 @@ runFullyConnected = print $ show $ let nn = (train example [-0.5, 0.2, 0.5] [0.0
 
 -- runFullyConnectedForward = cataforward example [[-0.5, 0.2, 0.5]] [0.0, 1.0, 0.0]
 
-runSineNetwork samples desiredoutputs = train (train example [0.3, 0.3, 0.3] [0.991]) [0.3, 0.3, 0.3] [0.991]
+runSineNetwork samples desiredoutputs = trains example samples desiredoutputs -- [[0.3, 0.3, 0.3], [0.3, 0.3, 0.3]] [[0.85],[0.991]]
 
 exampleSineNetwork = Fx ( Layer w2 b2 sigmoid sigmoid' 
                         (Fx (Layer w1 b1 sigmoid sigmoid' 
