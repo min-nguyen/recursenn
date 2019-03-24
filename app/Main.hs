@@ -30,12 +30,12 @@ import Text.Show.Functions
 import qualified Vector as V
 import Vector (Vector((:-)))
 import Debug.Trace
-import Convolution
+import Recurrent
 import TestSuite
 
 main = do 
      
-     readDataConv
+     runRecurrent'
      -- inputFile <- readFile "sine_data"
      -- outputFile <- readFile "sine_outputs"
      -- let inputlines = lines inputFile
@@ -48,21 +48,15 @@ main = do
      --print $ show $ runConvolutional
 
 
-readDataConv = do 
-     inputFile <- readFile "conv_data"
-     outputFile <- readFile "conv_output"
-     let  inputlines = lines inputFile 
-          outputlines = lines outputFile
-          -- print $ map length ((map2 read (map (splitOn ",") inputlines)) ::  [[Double]])
-          input = map (\x -> [x]) $ map (chunksOf 7) ((map2 read (map (splitOn ",") inputlines)) ::  [[Double]])
-     --      input = map (chunksOf 5) $ map2 read $ map (splitOn ",") inputlines 
-          output = map ((\x -> [[[x]]]) . read)  outputlines
-
-          nn = runConvolutionalV3 input output
-     print $ show nn 
-     -- print $ input
-     -- print $ output
-     -- print $ show input
+-- readDataConv = do 
+--      inputFile <- readFile "conv_data"
+--      outputFile <- readFile "conv_output"
+--      let  inputlines = lines inputFile 
+--           outputlines = lines outputFile
+--           input = map (\x -> [x]) $ map (chunksOf 7) ((map2 read (map (splitOn ",") inputlines)) ::  [[Double]])
+--           output = map ((\x -> [[[x]]]) . read)  outputlines
+--           nn = runConvolutionalV3 input output
+--      print $ show nn 
 
 makeDataFC = do 
      args <- getArgs

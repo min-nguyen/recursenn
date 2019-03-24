@@ -75,7 +75,13 @@ data Deltas  = Deltas {
                         deltaB           :: [Double],
                         deltaXs          :: [[Double]]
                 }
-                | NoDeltas deriving Show
+                | NoDeltas
+
+instance Show Deltas where 
+    show (Deltas w u b x) =
+        "Deltas: \n" ++ "DeltaW: " ++ show w ++ "\n" ++ "DeltaU: " ++ show u ++ "\n" ++
+        "DeltaB: " ++ show b ++ "\n" ++ "DeltaX: " ++ show x ++ "\n"
+    show NoDeltas = "NoDeltas \n"
 
 data Cell  k =   Cell {   
                         _cellState   :: State,
@@ -87,7 +93,7 @@ data Cell  k =   Cell {
                         _cellDeltas  :: Deltas,
                         _innerCell   :: k
                      }
-                | InputCell  deriving (Functor, Show)
+                | InputCell  deriving (Functor)
 makeLenses ''Cell
 
 data Layer k =  Layer {
@@ -95,8 +101,24 @@ data Layer k =  Layer {
                         _cells       :: Fix Cell,
                         _innerLayer  :: k
                     }
-                | InputLayer deriving (Functor, Foldable, Traversable, Show)
+                | InputLayer deriving (Functor, Foldable, Traversable)
 makeLenses ''Layer
+
+instance Show k => Show (Cell k) where 
+    show (Cell cstate cdeltas inner_cell) =
+        "Cell: \n" ++ "State: " ++ show cstate ++ "\n" ++ "Deltas: " ++ show cdeltas ++ "\n"
+        ++ show inner_cell
+    show (EndCell cstate cdeltas inner_cell) =
+        "EndCell: \n" ++ "State: " ++ show cstate ++ "\n" ++ "Deltas: " ++ show cdeltas ++ "\n"
+        ++ show inner_cell 
+    show InputCell = "InputCell \n"
+
+
+instance Show k => Show (Layer k) where
+    show (Layer hparam cell inner_layer) = 
+        "Layer\n" ++ "Hyperparameters: " ++ show hparam ++ "\n" ++ "Cells: \n" ++ show cell ++
+        "\n" ++ show inner_layer
+    show InputLayer = "InputLayer \n"
 
 runLayer :: Fix Layer  -> Inputs -> Fix Layer
 runLayer layer sample = let f = \(layer', forwardProp') -> (layer', forwardProp' sample, (initBackProp 1 2 Nothing Nothing))
@@ -140,7 +162,7 @@ algCell cell
                 in  ((ForwardProp gates x  (fp^.output) label output' state'  (fp^.params) (tail (fp^.inputStack))):fps)) . forwardProps
       in  (Fx (cell & innerCell .~ nextCell), forwardProps')
 
-
+-- fix 'a' in delta W
 coalgCell :: (Fix Cell, [ForwardProp], BackProp) -> Cell (Fix Cell, [ForwardProp], BackProp) 
 coalgCell (Fx InputCell, forwardProps, backProp)
     = InputCell
@@ -176,7 +198,8 @@ coalgCell (Fx cell, forwardProps, backProp)
                                 & nextLayerDXs .~   case backProp ^. nextLayerDXs 
                                                     of   Just dxs -> Just (tail dxs) 
                                                          Nothing  -> Nothing
-    in (cell & cellState .~ updatedState
+    in  trace (show ( deltaGates, (fp^.x) )) 
+        (cell & cellState .~ updatedState
              & cellDeltas .~ (Deltas deltaW deltaU deltaB [deltaX])
              & innerCell .~ (fromJust (cell ^? innerCell), tail forwardProps, backProp'))
             
@@ -192,7 +215,7 @@ algCell2 cell
                     deltaU_total = (eleaddM deltaU1 deltaU2) -- verified
                     deltaB_total = (eleadd deltaB1 deltaB2)
                     deltaXs      = deltaXs1 ++ deltaXs2
-                in  Deltas deltaW_total deltaU_total deltaB_total deltaXs) . deltaTotalFunc
+                in Deltas deltaW_total deltaU_total deltaB_total deltaXs) . deltaTotalFunc
         in  (Fx (cell {_innerCell = nextCell}), deltaTotalFunc') --
 
 compGates :: HyperParameters -> [Double] -> [Double] -> Gates
@@ -249,10 +272,12 @@ example' =
                      V.fromList [[0.15]       , [0.65]         , [0.2]        ,    [0.1]])
                     (Fx (EndCell [0.0] NoDeltas (Fx (Cell [0] NoDeltas (Fx InputCell))))) (Fx InputLayer)))
 
-runRecurrent = print $ show $ runLayer example' sample
-            where sample =  [([1,2],[0.5]),([0.5,3], [1.25])]
+runRecurrent = print $ show $ runLayer example sample
+            where sample =  [([0.8,0.4],[0.5]),([0.5,0.1], [0.25])]
                          
-
+runRecurrent' = print $ show $ runLayer example' sample
+            where sample =  [([1, 2],[0.5]),([0.5, 3], [1.25])]
+                         
 
 runCell :: Layer k -> Layer k 
 runCell InputLayer = InputLayer
