@@ -34,8 +34,9 @@ import Recurrent
 import TestSuite
 
 main = do 
-     
-     runRecurrent'
+     dna <- readDNA :: IO [[([Double], [Double])]]
+     runDNA dna
+     -- runRecurrent'
      -- inputFile <- readFile "sine_data"
      -- outputFile <- readFile "sine_outputs"
      -- let inputlines = lines inputFile
@@ -61,11 +62,43 @@ main = do
 makeDataFC = do 
      args <- getArgs
      content <- readFile (args !! 0)
-     let linesOfFiles = lines content
-         numbers = map read linesOfFiles
+     let linesOfFile = lines content
+         numbers = map read linesOfFile
          output  = map sin numbers 
          output' = map ((\x -> x ++ "\n") . (\z -> formatFloatN z 10)) output
      writeFile "sine_outputs" $ concat output'
+
+readDNA :: IO [[([Double], [Double])]]
+readDNA = do 
+     formatDNA
+     inputFile <- readFile "dna_dataa"
+     let linesOfFile = lines inputFile 
+         dna = mapDNA linesOfFile
+     return dna
+     
+formatDNA = do 
+     inputFile <- readFile "dna_data"
+     let linesOfFile = lines inputFile
+         dna_data = map (\x -> x ++ "\n") $ (filter (\x -> length x == 6) linesOfFile) 
+     writeFile "dna_dataa" $ concat dna_data
+
+mapDNA :: [String] -> [[([Double], [Double])]]
+mapDNA s = 
+     map f s
+     where f :: String -> [([Double], [Double])]
+           f dna = let dna_strand = map (\z -> case z of    'a' -> 0.2
+                                                            'c' -> 0.4
+                                                            'g' -> 0.6
+                                                            't' -> 0.8) dna
+                       input = init dna_strand 
+                       desired_output = tail dna_strand 
+                       
+                   in  map (mapT2 (\x -> [x])) $ zip input desired_output
+
+-- formatDataRNN = do 
+--      contents <- mapM readFile ["t" ++ show n ++ ".csv" | n <- [1..11]]
+--      let linesOfFiles = map lines contents 
+--          numbers = map2 read lines
 
 readShiftRight = do 
      args <- getArgs
@@ -74,3 +107,7 @@ readShiftRight = do
           numbers = map read linesOfFiles
           output' = map ((\x -> x ++ "\n") . (\z -> formatFloatN (z/10) 5)) numbers
      writeFile "sequence" $ concat output'
+
+f :: [[[Double]]] -> String
+f s  = case s of [] -> "hi"
+                 _  -> "bye"

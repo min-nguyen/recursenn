@@ -52,7 +52,7 @@ data ForwardProp = ForwardProp {
                         _h           :: [Double],
                         _label       :: Label,
                         _output      :: [Double],
-                        _prevState   :: [Double],
+                        _prevState   :: [Double], -- change this to just state
                         _params      :: HyperParameters,
                         _inputStack  :: Inputs
                     } deriving Show
@@ -67,6 +67,8 @@ data BackProp   = BackProp {
                         _nextLayerWs        :: Maybe Weights
                     } deriving Show
 makeLenses ''BackProp
+
+
 
 
 data Deltas  = Deltas {
@@ -120,6 +122,13 @@ instance Show k => Show (Layer k) where
         "\n" ++ show inner_layer
     show InputLayer = "InputLayer \n"
 
+trains :: Fix Layer -> [Inputs] -> Fix Layer
+trains neuralnet samples   
+    = foldr (\sample nn -> 
+                  let updatedNetwork = runLayer nn sample 
+                  in  updatedNetwork) neuralnet samples
+
+
 runLayer :: Fix Layer  -> Inputs -> Fix Layer
 runLayer layer sample = let f = \(layer', forwardProp') -> (layer', forwardProp' sample, (initBackProp 1 2 Nothing Nothing))
                          in  meta algLayer f coalgLayer layer
@@ -162,7 +171,9 @@ algCell cell
                 in  ((ForwardProp gates x  (fp^.output) label output' state'  (fp^.params) (tail (fp^.inputStack))):fps)) . forwardProps
       in  (Fx (cell & innerCell .~ nextCell), forwardProps')
 
--- fix 'a' in delta W
+
+-- Do i need to add deltaX and deltaOut to produce the real deltaOut at every cell??
+
 coalgCell :: (Fix Cell, [ForwardProp], BackProp) -> Cell (Fix Cell, [ForwardProp], BackProp) 
 coalgCell (Fx InputCell, forwardProps, backProp)
     = InputCell
@@ -172,12 +183,12 @@ coalgCell (Fx cell, forwardProps, backProp)
         (gate, updatedState)    = (fp ^. gates, fp ^. prevState)
         (weightsW, weightsU)    = mapT2 (V.foldr (++) [[]]) (fp^.params._1, fp^.params._2)
 
-        BackProp dState_next deltaError_next deltaGates_next f_next _ _ = backProp
+        BackProp dState_next deltaOut_next deltaGates_next f_next _ _ = backProp
 
         dOut =  
             case (cell, backProp ^. nextLayerWs, backProp ^. nextLayerDXs) 
             of  (EndCell {},Nothing, _)  -> (elesub (fp^.output)  (fp^.label)) 
-                (Cell {},   Nothing, _)  -> eleadd deltaError_next (elesub (fp^.output)  (fp^.label))
+                (Cell {},   Nothing, _)  -> eleadd deltaOut_next (elesub (fp^.output)  (fp^.label))
                 (_, Just w, Just dX)     -> elemul (mvmul  (transpose $ V.foldr (++) [[]] w) (head dX)) (fp ^. output) 
         
         deltaState = eleadd (elemul3 dOut (gate ! 4) (map (sub1 . sqr . tanh) updatedState)) (elemul dState_next f_next)
@@ -198,7 +209,7 @@ coalgCell (Fx cell, forwardProps, backProp)
                                 & nextLayerDXs .~   case backProp ^. nextLayerDXs 
                                                     of   Just dxs -> Just (tail dxs) 
                                                          Nothing  -> Nothing
-    in  trace (show ( deltaGates, (fp^.x) )) 
+    in  
         (cell & cellState .~ updatedState
              & cellDeltas .~ (Deltas deltaW deltaU deltaB [deltaX])
              & innerCell .~ (fromJust (cell ^? innerCell), tail forwardProps, backProp'))
@@ -270,7 +281,11 @@ example' =
             (Fx (Layer (V.fromList [[[0.7, 0.45]],  [[0.95, 0.8]],  [[0.45, 0.25]],   [[0.6, 0.4]]],
                      V.fromList [[[0.1]]      ,  [[0.8]]      ,   [[0.15]]     ,    [[0.25]]],
                      V.fromList [[0.15]       , [0.65]         , [0.2]        ,    [0.1]])
-                    (Fx (EndCell [0.0] NoDeltas (Fx (Cell [0] NoDeltas (Fx InputCell))))) (Fx InputLayer)))
+                    (Fx (EndCell [0.0] NoDeltas 
+                        (Fx (Cell [0] NoDeltas  
+                            (Fx (Cell [0] NoDeltas 
+                                (Fx (Cell [0] NoDeltas 
+                                    (Fx InputCell))))))))) (Fx InputLayer)))
 
 runRecurrent = print $ show $ runLayer example sample
             where sample =  [([0.8,0.4],[0.5]),([0.5,0.1], [0.25])]
@@ -278,6 +293,9 @@ runRecurrent = print $ show $ runLayer example sample
 runRecurrent' = print $ show $ runLayer example' sample
             where sample =  [([1, 2],[0.5]),([0.5, 3], [1.25])]
                          
+runDNA :: [[([Double], [Double])]] -> IO ()
+runDNA samples = do 
+    print $ show $ trains example' samples
 
 runCell :: Layer k -> Layer k 
 runCell InputLayer = InputLayer
