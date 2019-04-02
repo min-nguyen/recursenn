@@ -23,6 +23,8 @@ import Control.Monad    hiding (mapM, sequence)
 import Debug.Trace
 import Data.Maybe
 import Data.These
+import Numeric
+
 -- import qualified Data.Functor.Fixedpoint    as F
 import Data.List (transpose)
 import qualified Data.Vec as V
@@ -254,3 +256,11 @@ sumMat3D m n = if null m then n else if null n then m else
 
 
 formatFloatN floatNum numOfDecimals = showFFloat (Just numOfDecimals) floatNum ""
+
+
+showFullPrecision :: Double -> String
+showFullPrecision x = showFFloat Nothing x ""
+
+reverseList :: [a] -> [a]
+reverseList [] = []
+reverseList (x:xs) =  x:reverseList xs

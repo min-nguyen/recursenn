@@ -34,6 +34,7 @@ import Recurrent
 import TestSuite
 
 main = do 
+     -- readShiftRight
      dna <- readDNA :: IO [[([Double], [Double])]]
      runDNA dna
      -- runRecurrent'
@@ -71,16 +72,16 @@ makeDataFC = do
 readDNA :: IO [[([Double], [Double])]]
 readDNA = do 
      formatDNA
-     inputFile <- readFile "dna_dataa"
+     inputFile <- readFile "rnn_results/dna_300_data"
      let linesOfFile = lines inputFile 
          dna = mapDNA linesOfFile
      return dna
      
 formatDNA = do 
-     inputFile <- readFile "dna_data"
+     inputFile <- readFile "rnn_results/dna_300"
      let linesOfFile = lines inputFile
          dna_data = map (\x -> x ++ "\n") $ (filter (\x -> length x == 6) linesOfFile) 
-     writeFile "dna_dataa" $ concat dna_data
+     writeFile "rnn_results/dna_300_data" $ concat dna_data
 
 mapDNA :: [String] -> [[([Double], [Double])]]
 mapDNA s = 
@@ -92,8 +93,8 @@ mapDNA s =
                                                             't' -> 0.8) dna
                        input = init dna_strand 
                        desired_output = tail dna_strand 
-                       
-                   in  map (mapT2 (\x -> [x])) $ zip input desired_output
+                       res = map (mapT2 (\x -> [x])) $ zip input desired_output
+                   in  res
 
 -- formatDataRNN = do 
 --      contents <- mapM readFile ["t" ++ show n ++ ".csv" | n <- [1..11]]
@@ -105,7 +106,7 @@ readShiftRight = do
      content <- readFile (args !! 0)
      let  linesOfFiles = lines content
           numbers = map read linesOfFiles
-          output' = map ((\x -> x ++ "\n") . (\z -> formatFloatN (z/10) 5)) numbers
+          output' = map ((\x -> x ++ "\n") . (\z -> showFullPrecision $ read $ formatFloatN (z/100) 5)) numbers
      writeFile "sequence" $ concat output'
 
 f :: [[[Double]]] -> String

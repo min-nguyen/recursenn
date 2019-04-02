@@ -88,11 +88,13 @@ instance Show Deltas where
 data Cell  k =   Cell {   
                         _cellState   :: State,
                         _cellDeltas  :: Deltas,
+                        _errorForTesting :: [Double],
                         _innerCell   :: k
                      }
                 | EndCell {
                         _cellState   :: State,
                         _cellDeltas  :: Deltas,
+                        _errorForTesting :: [Double],
                         _innerCell   :: k
                      }
                 | InputCell  deriving (Functor)
@@ -107,10 +109,10 @@ data Layer k =  Layer {
 makeLenses ''Layer
 
 instance Show k => Show (Cell k) where 
-    show (Cell cstate cdeltas inner_cell) =
+    show (Cell cstate cdeltas err inner_cell ) =
         "Cell: \n" ++ "State: " ++ show cstate ++ "\n" ++ "Deltas: " ++ show cdeltas ++ "\n"
         ++ show inner_cell
-    show (EndCell cstate cdeltas inner_cell) =
+    show (EndCell cstate cdeltas err inner_cell ) =
         "EndCell: \n" ++ "State: " ++ show cstate ++ "\n" ++ "Deltas: " ++ show cdeltas ++ "\n"
         ++ show inner_cell 
     show InputCell = "InputCell \n"
@@ -143,7 +145,10 @@ algLayer (Layer params cells (innerLayer, nextForwardProp))
                         initialForwardProp = initForwardProp hDim dDim params inputs
                         (cell, fpFunc)     = cata algCell cells 
                         layerFP            = fpFunc [initialForwardProp]
-                    in  (layerFP:fps)) . nextForwardProp
+                        showinputs =  map (\l -> l ^. x) layerFP
+                        showoutputs =  map (\l -> l ^. output) layerFP
+                    in  --trace (show showinputs ++ "\n" ++ show showoutputs) 
+                        (layerFP:fps)) . nextForwardProp
       in (Fx (Layer params cells innerLayer), forwardProp) 
 
 coalgLayer :: (Fix Layer, [[ForwardProp]], BackProp) -> Layer (Fix Layer, [[ForwardProp]], BackProp)
@@ -152,10 +157,12 @@ coalgLayer (Fx InputLayer, fp, bp)
 coalgLayer (Fx (Layer params cells innerLayer), fps, backProp)
     =   let w                   = params^._1
             (hDim, dDim)        = (length $ w ! 1, length $ head $ w ! 1)
-            (cell, deltaFunc)   = hylo algCell2 coalgCell (cells, head fps, backProp)
+            (cell, (errorFunc, deltaFunc))   = hylo algCell2 coalgCell (cells, head fps, backProp)
             deltaTotal          = deltaFunc (initDelta hDim dDim)
+            errorTotal          = errorFunc ([0.0])
             backProp'           = initBackProp hDim dDim (Just $ deltaXs deltaTotal) (Just $ w)
-        in  updateParameters (Layer params cell (innerLayer, tail fps, backProp')) deltaTotal
+        in  trace ((\z -> showFullPrecision $ read $ formatFloatN (z/100) 5) $ sum $ map abs $ concat $ deltaW deltaTotal) $ 
+            updateParameters (Layer params cell (innerLayer, tail fps, backProp')) deltaTotal
 
 algCell ::  Cell (Fix Cell, [ForwardProp] -> [ForwardProp]) -> (Fix Cell, [ForwardProp] -> [ForwardProp]) -- use forwardprop storing inputs, instead of Inputs?
 algCell InputCell = 
@@ -185,6 +192,8 @@ coalgCell (Fx cell, forwardProps, backProp)
 
         BackProp dState_next deltaOut_next deltaGates_next f_next _ _ = backProp
 
+        error = (elesub (fp^.output)  (fp^.label))
+
         dOut =  
             case (cell, backProp ^. nextLayerWs, backProp ^. nextLayerDXs) 
             of  (EndCell {},Nothing, _)  -> (elesub (fp^.output)  (fp^.label)) 
@@ -211,14 +220,16 @@ coalgCell (Fx cell, forwardProps, backProp)
                                                          Nothing  -> Nothing
     in  
         (cell & cellState .~ updatedState
-             & cellDeltas .~ (Deltas deltaW deltaU deltaB [deltaX])
-             & innerCell .~ (fromJust (cell ^? innerCell), tail forwardProps, backProp'))
+              & cellDeltas .~ (Deltas deltaW deltaU deltaB [deltaX])
+              & innerCell .~ (fromJust (cell ^? innerCell), tail forwardProps, backProp')
+              & errorForTesting .~ error)
             
-algCell2 ::  Cell (Fix Cell, Deltas -> Deltas) ->  (Fix Cell, Deltas -> Deltas)
+algCell2 ::  Cell (Fix Cell,  ([Double] -> [Double], Deltas -> Deltas)) ->  (Fix Cell, ([Double] -> [Double], Deltas -> Deltas))
 algCell2 InputCell 
-    = (Fx InputCell, id)
+    = (Fx InputCell, (id, id))
 algCell2 cell
-    =   let (state, deltas, (nextCell, deltaTotalFunc)) = (_cellState cell, _cellDeltas cell, _innerCell cell)
+    =   let (state, deltas, (nextCell, (errorTotalFunc, deltaTotalFunc))) = (_cellState cell, _cellDeltas cell, _innerCell cell)
+            error = cell ^. errorForTesting
             Deltas deltaW1 deltaU1 deltaB1 deltaXs1 = deltas
             deltaTotalFunc' = (\deltaTotal -> 
                 let Deltas deltaW2 deltaU2 deltaB2 deltaXs2 = deltaTotal
@@ -227,7 +238,8 @@ algCell2 cell
                     deltaB_total = (eleadd deltaB1 deltaB2)
                     deltaXs      = deltaXs1 ++ deltaXs2
                 in Deltas deltaW_total deltaU_total deltaB_total deltaXs) . deltaTotalFunc
-        in  (Fx (cell {_innerCell = nextCell}), deltaTotalFunc') --
+            errorTotalFunc' = (\err -> zipWith (+) err error) . errorTotalFunc
+        in  (Fx (cell {_innerCell = nextCell}), (errorTotalFunc', deltaTotalFunc')) --
 
 compGates :: HyperParameters -> [Double] -> [Double] -> Gates
 compGates (weightsW, weightsU, biases) x h 
@@ -269,26 +281,27 @@ initBackProp h d deltaX weights
 initDelta :: Int -> Int -> Deltas
 initDelta h d = Deltas (fillMatrix (4 * h) (d) 0.0) (fillMatrix (4 * h) (h) 0.0) (replicate  (4 * h) 0.0) [[]]
 
-example =   Fx (Layer (V.fromList [[[0.7]],  [[0.95]],  [[0.45]],   [[0.6]]],
-                       V.fromList [[[0.1]]      ,  [[0.8]]      ,   [[0.15]]   ,    [[0.25]]],
-                       V.fromList [[0.15]       , [0.65]        , [0.2]        ,    [0.1]])
-                     (Fx (EndCell [0.68381] NoDeltas (Fx (Cell [0] NoDeltas (Fx InputCell)))))
-            (Fx (Layer (V.fromList [[[0.7, 0.45]],  [[0.95, 0.8]],  [[0.45, 0.25]],   [[0.6, 0.4]]],
-                     V.fromList [[[0.1]]      ,  [[0.8]]      ,   [[0.15]]     ,    [[0.25]]],
-                     V.fromList [[0.15]       , [0.65]         , [0.2]        ,    [0.1]])
-                    (Fx (EndCell [0.68381] NoDeltas (Fx (Cell [0] NoDeltas (Fx InputCell))))) (Fx InputLayer))))
+-- example =   Fx (Layer (V.fromList [[[0.7]],  [[0.95]],  [[0.45]],   [[0.6]]],
+--                        V.fromList [[[0.1]]      ,  [[0.8]]      ,   [[0.15]]   ,    [[0.25]]],
+--                        V.fromList [[0.15]       , [0.65]        , [0.2]        ,    [0.1]])
+--                      (Fx (EndCell [0.68381] NoDeltas (Fx (Cell [0] NoDeltas (Fx InputCell)))))
+--             (Fx (Layer (V.fromList [[[0.7, 0.45]],  [[0.95, 0.8]],  [[0.45, 0.25]],   [[0.6, 0.4]]],
+--                      V.fromList [[[0.1]]      ,  [[0.8]]      ,   [[0.15]]     ,    [[0.25]]],
+--                      V.fromList [[0.15]       , [0.65]         , [0.2]        ,    [0.1]])
+--                     (Fx (EndCell [0.68381] NoDeltas (Fx (Cell [0] NoDeltas (Fx InputCell))))) (Fx InputLayer))))
 example' =   
-            (Fx (Layer (V.fromList [[[0.7, 0.45]],  [[0.95, 0.8]],  [[0.45, 0.25]],   [[0.6, 0.4]]],
+            (Fx (Layer (V.fromList [[[0.7]],  [[0.95]],  [[0.45]],   [[0.6]]],
                      V.fromList [[[0.1]]      ,  [[0.8]]      ,   [[0.15]]     ,    [[0.25]]],
                      V.fromList [[0.15]       , [0.65]         , [0.2]        ,    [0.1]])
-                    (Fx (EndCell [0.0] NoDeltas 
-                        (Fx (Cell [0] NoDeltas  
-                            (Fx (Cell [0] NoDeltas 
-                                (Fx (Cell [0] NoDeltas 
-                                    (Fx InputCell))))))))) (Fx InputLayer)))
+                    (Fx (EndCell [0.0] NoDeltas [0]
+                        (Fx (Cell [0] NoDeltas  [0]
+                            (Fx (Cell [0] NoDeltas [0]
+                                (Fx (Cell [0] NoDeltas [0] 
+                                    (Fx (Cell [0] NoDeltas [0] 
+                                        (Fx InputCell))))))))))) (Fx InputLayer)))
 
-runRecurrent = print $ show $ runLayer example sample
-            where sample =  [([0.8,0.4],[0.5]),([0.5,0.1], [0.25])]
+-- runRecurrent = print $ show $ runLayer example sample
+--             where sample =  [([0.8,0.4],[0.5]),([0.5,0.1], [0.25])]
                          
 runRecurrent' = print $ show $ runLayer example' sample
             where sample =  [([1, 2],[0.5]),([0.5, 3], [1.25])]
@@ -308,7 +321,8 @@ runCell (Layer params cells innerLayer)
           initialBackProp    = initBackProp hDim dDim Nothing Nothing
           initialDeltaTotal  = initDelta  hDim dDim
 
-          (cellf, deltaTotalFunc) = let h =  (\(c, f) -> (c, f [initialForwardProp], initialBackProp))
+          (cellf, (errorTotalFunc, deltaTotalFunc)) = 
+                                    let h =  (\(c, f) -> (c, f [initialForwardProp], initialBackProp))
 
                                     in  ((cata algCell2) . (meta algCell h coalgCell)) cells
 
