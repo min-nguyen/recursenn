@@ -34,10 +34,10 @@ import Convolution
 import TestSuite
 
 main = do 
-     -- conv_output <- readFile "conv_results/conv_labels_224"
+     -- conv_output <- readFile "conv_results/oz_data"
      -- let ilines = lines conv_output :: [String]
-     --     slines = map (\y -> show y ++ "\n") ((map (\x -> if (read x) == 0.0 then (-0.0) else 0.5 ) ilines) :: [Double])
-     -- writeFile "conv_results/conv_labels_224'" $ concat slines
+     --     slines = map (\y ->  y ++ "\n") (map (head . splitOn ",") ilines)
+     -- writeFile "conv_results/oz_labels" $ concat slines
 
      readDataConv
 
@@ -57,8 +57,8 @@ main = do
 
 
 readDataConv = do 
-     inputFile <- readFile "conv_results/conv_data_56"
-     outputFile <- readFile "conv_results/conv_labels_56"
+     inputFile <- readFile "conv_results/oz_data"
+     outputFile <- readFile "conv_results/oz_labels"
      let  inputlines = lines inputFile 
           outputlines = lines outputFile
           input = map (\x -> [x]) $ map (chunksOf 7) ((map2 read (map (splitOn ",") inputlines)) ::  [[Double]])
