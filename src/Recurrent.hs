@@ -161,8 +161,10 @@ coalgLayer (Fx (Layer params cells innerLayer), fps, backProp)
             deltaTotal          = deltaFunc (initDelta hDim dDim)
             errorTotal          = errorFunc ([0.0])
             backProp'           = initBackProp hDim dDim (Just $ deltaXs deltaTotal) (Just $ w)
-        in  trace ((\z -> showFullPrecision $ read $ formatFloatN (z/100) 5) $ sum $ map abs $ concat $ deltaW deltaTotal) $ 
-            updateParameters (Layer params cell (innerLayer, tail fps, backProp')) deltaTotal
+            showcost            = trace ((\z -> showFullPrecision $ read $ formatFloatN (z/100) 8) $ sum $ map abs $ concat $ deltaW deltaTotal) 
+
+        in  case innerLayer of (Fx (InputLayer)) ->    updateParameters (Layer params cell (innerLayer, tail fps, backProp')) deltaTotal
+                               _             -> showcost (updateParameters (Layer params cell (innerLayer, tail fps, backProp')) deltaTotal)
 
 algCell ::  Cell (Fix Cell, [ForwardProp] -> [ForwardProp]) -> (Fix Cell, [ForwardProp] -> [ForwardProp]) -- use forwardprop storing inputs, instead of Inputs?
 algCell InputCell = 
@@ -261,7 +263,8 @@ updateParameters layer delta_total
             w = concat $ V.toList weights_w
             u = concat $ V.toList weights_u
             b = concat $ V.toList biases
-            w'     = V.fromList $ map cons $ elesubm w (map2 (0.1 *) deltaW_total)
+            w'     = V.fromList $ map cons $ (elesubm (elesubm w (map2 (0.1 *) deltaW_total)) (replicate 4 (head deltaXs)))
+           
             u'     = V.fromList $ map cons $ elesubm u (map2 (0.1 *) deltaU_total)
             b'     = V.fromList $ map cons $ elesub  b (map (0.1 *)  deltaB_total)
 
@@ -281,14 +284,24 @@ initBackProp h d deltaX weights
 initDelta :: Int -> Int -> Deltas
 initDelta h d = Deltas (fillMatrix (4 * h) (d) 0.0) (fillMatrix (4 * h) (h) 0.0) (replicate  (4 * h) 0.0) [[]]
 
--- example =   Fx (Layer (V.fromList [[[0.7]],  [[0.95]],  [[0.45]],   [[0.6]]],
---                        V.fromList [[[0.1]]      ,  [[0.8]]      ,   [[0.15]]   ,    [[0.25]]],
---                        V.fromList [[0.15]       , [0.65]        , [0.2]        ,    [0.1]])
---                      (Fx (EndCell [0.68381] NoDeltas (Fx (Cell [0] NoDeltas (Fx InputCell)))))
---             (Fx (Layer (V.fromList [[[0.7, 0.45]],  [[0.95, 0.8]],  [[0.45, 0.25]],   [[0.6, 0.4]]],
---                      V.fromList [[[0.1]]      ,  [[0.8]]      ,   [[0.15]]     ,    [[0.25]]],
---                      V.fromList [[0.15]       , [0.65]         , [0.2]        ,    [0.1]])
---                     (Fx (EndCell [0.68381] NoDeltas (Fx (Cell [0] NoDeltas (Fx InputCell))))) (Fx InputLayer))))
+example =   Fx (Layer (V.fromList [[[0.7]],  [[0.95]],  [[0.45]],   [[0.6]]],
+                       V.fromList [[[0.2]]      ,  [[0.8]]      ,   [[0.15]]   ,    [[0.25]]],
+                       V.fromList [[0.0]       , [0.0]        , [0.0]        ,    [0.0]])
+                       (Fx (EndCell [0.0] NoDeltas [0]
+                            (Fx (Cell [0] NoDeltas  [0]
+                                (Fx (Cell [0] NoDeltas [0]
+                                    (Fx (Cell [0] NoDeltas [0] 
+                                        (Fx (Cell [0] NoDeltas [0] 
+                                            (Fx InputCell)))))))))))
+            (Fx (Layer (V.fromList [[[0.45]],  [[0.8]],  [[0.25]],   [[0.4]]],
+                     V.fromList [[[0.6]]      ,  [[0.3]]      ,   [[0.3]]     ,    [[0.7]]],
+                     V.fromList [[0.0]       , [0.0]         , [0.0]        ,    [0.0]])
+                     (Fx (EndCell [0.0] NoDeltas [0]
+                        (Fx (Cell [0] NoDeltas  [0]
+                            (Fx (Cell [0] NoDeltas [0]
+                                (Fx (Cell [0] NoDeltas [0] 
+                                    (Fx (Cell [0] NoDeltas [0] 
+                                        (Fx InputCell))))))))))) (Fx InputLayer))))
 example' =   
             (Fx (Layer (V.fromList [[[0.7]],  [[0.95]],  [[0.45]],   [[0.6]]],
                      V.fromList [[[0.1]]      ,  [[0.8]]      ,   [[0.15]]     ,    [[0.25]]],
@@ -308,7 +321,7 @@ runRecurrent' = print $ show $ runLayer example' sample
                          
 runDNA :: [[([Double], [Double])]] -> IO ()
 runDNA samples = do 
-    print $ show $ trains example' samples
+    print $ show $ trains example samples
 
 runCell :: Layer k -> Layer k 
 runCell InputLayer = InputLayer

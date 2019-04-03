@@ -106,7 +106,7 @@ readShiftRight = do
      content <- readFile (args !! 0)
      let  linesOfFiles = lines content
           numbers = map read linesOfFiles
-          output' = map ((\x -> x ++ "\n") . (\z -> showFullPrecision $ read $ formatFloatN (z/100) 5)) numbers
+          output' = map ((\x -> x ++ "\n") . (\z -> showFullPrecision $ read $ formatFloatN (z/100) 6)) numbers
      writeFile "sequence" $ concat output'
 
 f :: [[[Double]]] -> String
