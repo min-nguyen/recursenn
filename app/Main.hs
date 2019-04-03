@@ -30,23 +30,24 @@ import Text.Show.Functions
 import qualified Vector as V
 import Vector (Vector((:-)))
 import Debug.Trace
-import Recurrent
+import FullyConnected2
 import TestSuite
 
 main = do 
+     -- makeDataFC
      -- readShiftRight
-     dna <- readDNA :: IO [[([Double], [Double])]]
-     runDNA dna
+     -- dna <- readDNA :: IO [[([Double], [Double])]]
+     -- runDNA dna
      -- runRecurrent'
-     -- inputFile <- readFile "sine_data"
-     -- outputFile <- readFile "sine_outputs"
-     -- let inputlines = lines inputFile
-     --     outputlines = lines outputFile
-     --     input = map read inputlines :: [Double]
-     --     output = map read outputlines :: [Double]
+     inputFile <- readFile "fullyconnected_results/sine_data_1400"
+     outputFile <- readFile "fullyconnected_results/sine_labels_1400"
+     let inputlines = lines inputFile
+         outputlines = lines outputFile
+         input = map read inputlines :: [Double]
+         output = map read outputlines :: [Double]
 
-     --     nn = runSineNetwork (map (\x ->  replicate 3 x) input) (map (\x -> [x]) output)
-     -- print $ show nn
+         nn = runSineNetwork (map (\x ->  replicate 3 x) input) (map (\x -> [x]) output)
+     print $ show nn
      --print $ show $ runConvolutional
 
 
@@ -67,7 +68,7 @@ makeDataFC = do
          numbers = map read linesOfFile
          output  = map sin numbers 
          output' = map ((\x -> x ++ "\n") . (\z -> formatFloatN z 10)) output
-     writeFile "sine_outputs" $ concat output'
+     writeFile "fullyconnected_results/sine_labels_1400" $ concat output'
 
 readDNA :: IO [[([Double], [Double])]]
 readDNA = do 
