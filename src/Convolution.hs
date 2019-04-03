@@ -117,7 +117,7 @@ coalg (Fx (FullyConnectedLayer innerLayer), BackProp fps outerDeltas outerFilter
 
                 deltas       = compDeltaFullyConnected outputImage desiredOutput (m, n, v)
                 
-            in  trace ((\z -> showFullPrecision  $ read $ formatFloatN (z/100) 8) $ head $ head $ head deltas) $ 
+            in  trace ((\z -> showFullPrecision  $ abs $ read $ formatFloatN (z/100) 8) $ head $ head $ head deltas) $ 
                             FullyConnectedLayer (innerLayer, BackProp (tail fps) deltas outerFilters desiredOutput)
 
 coalg (Fx (ConvolutionalLayer filters biases innerLayer), BackProp fps outerDeltas outerFilters desiredOutput)
