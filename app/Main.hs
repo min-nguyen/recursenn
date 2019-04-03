@@ -30,36 +30,41 @@ import Text.Show.Functions
 import qualified Vector as V
 import Vector (Vector((:-)))
 import Debug.Trace
-import FullyConnected2
+import Convolution
 import TestSuite
 
 main = do 
-     -- makeDataFC
-     -- readShiftRight
+     -- conv_output <- readFile "conv_results/conv_labels_224"
+     -- let ilines = lines conv_output :: [String]
+     --     slines = map (\y -> show y ++ "\n") ((map (\x -> if (read x) == 0.0 then (-0.0) else 0.5 ) ilines) :: [Double])
+     -- writeFile "conv_results/conv_labels_224'" $ concat slines
+
+     readDataConv
+
      -- dna <- readDNA :: IO [[([Double], [Double])]]
      -- runDNA dna
      -- runRecurrent'
-     inputFile <- readFile "fullyconnected_results/sine_data_1400"
-     outputFile <- readFile "fullyconnected_results/sine_labels_1400"
-     let inputlines = lines inputFile
-         outputlines = lines outputFile
-         input = map read inputlines :: [Double]
-         output = map read outputlines :: [Double]
+     -- inputFile <- readFile "fullyconnected_results/sine_data_1400"
+     -- outputFile <- readFile "fullyconnected_results/sine_labels_1400"
+     -- let inputlines = lines inputFile
+     --     outputlines = lines outputFile
+     --     input = map read inputlines :: [Double]
+     --     output = map read outputlines :: [Double]
 
-         nn = runSineNetwork (map (\x ->  replicate 3 x) input) (map (\x -> [x]) output)
-     print $ show nn
+     --     nn = runSineNetwork (map (\x ->  replicate 3 x) input) (map (\x -> [x]) output)
+     -- print $ show nn
      --print $ show $ runConvolutional
 
 
--- readDataConv = do 
---      inputFile <- readFile "conv_data"
---      outputFile <- readFile "conv_output"
---      let  inputlines = lines inputFile 
---           outputlines = lines outputFile
---           input = map (\x -> [x]) $ map (chunksOf 7) ((map2 read (map (splitOn ",") inputlines)) ::  [[Double]])
---           output = map ((\x -> [[[x]]]) . read)  outputlines
---           nn = runConvolutionalV3 input output
---      print $ show nn 
+readDataConv = do 
+     inputFile <- readFile "conv_results/conv_data_56"
+     outputFile <- readFile "conv_results/conv_labels_56"
+     let  inputlines = lines inputFile 
+          outputlines = lines outputFile
+          input = map (\x -> [x]) $ map (chunksOf 7) ((map2 read (map (splitOn ",") inputlines)) ::  [[Double]])
+          output = map ((\x -> [[[x]]]) . read)  outputlines
+          nn = runConvolutionalV3 input output
+     print $ show nn 
 
 makeDataFC = do 
      args <- getArgs
@@ -110,6 +115,3 @@ readShiftRight = do
           output' = map ((\x -> x ++ "\n") . (\z -> showFullPrecision $ read $ formatFloatN (z/100) 6)) numbers
      writeFile "sequence" $ concat output'
 
-f :: [[[Double]]] -> String
-f s  = case s of [] -> "hi"
-                 _  -> "bye"

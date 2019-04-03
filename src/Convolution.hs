@@ -116,8 +116,9 @@ coalg (Fx (FullyConnectedLayer innerLayer), BackProp fps outerDeltas outerFilter
                 (m, n, v)   = (length (head $ head inputImage), length (head inputImage), length inputImage)
 
                 deltas       = compDeltaFullyConnected outputImage desiredOutput (m, n, v)
-
-            in  trace (show $ head $ head $ head deltas) $ FullyConnectedLayer (innerLayer, BackProp (tail fps) deltas outerFilters desiredOutput)
+                
+            in  trace ((\z -> showFullPrecision  $ read $ formatFloatN (z/100) 8) $ head $ head $ head deltas) $ 
+                            FullyConnectedLayer (innerLayer, BackProp (tail fps) deltas outerFilters desiredOutput)
 
 coalg (Fx (ConvolutionalLayer filters biases innerLayer), BackProp fps outerDeltas outerFilters desiredOutput)
         =   let (output:input:_) = fps
@@ -187,21 +188,39 @@ neuralnet = Fx (FullyConnectedLayer  (  Fx $ ConvolutionalLayer [--[[[1, 2, 1], 
                                                                    --[[1, 0,-1], [2, 0, 2], [1, 0,-1]], 
                                                                    --[[1, 1, 1], [0, 0, 0], [-1,-1,-1]],
                                                                    --[[1, 0,-1], [1, 0,-1], [1, 0,-1]]],
-                                                                  [[[0,-0.3,-0.6], [0.3, 0,-0.3], [0.6, 0.3, 0]],
-                                                                   [[-0.6,-0.3,0], [-0.3,0,-0.6], [0, 0.3, 0.6]],
-                                                                   [[0, 0.3, 0.6], [-0.6,0, 0.3], [-0.6,-0.3,0]],
-                                                                   [[0.6, 0.3, 0], [0.3, 0,-0.3], [0,-0.3,-0.6]]]]
+                                                                  [[[0.0,-0.3,-0.6], 
+                                                                    [0.3, 0.0,-0.3], 
+                                                                    [0.6, 0.3, 0.0]],
+                                                                   [[-0.6,-0.3,0.0], 
+                                                                    [-0.3,0.0,-0.6], 
+                                                                    [0.0, 0.3, 0.6]],
+                                                                   [[0.0, 0.3, 0.6], 
+                                                                    [-0.6,0.0, 0.3], 
+                                                                    [-0.6,-0.3,0.0]],
+                                                                   [[0.6, 0.3, 0], 
+                                                                    [0.3, 0.0,-0.3], 
+                                                                    [0.0,-0.3,-0.6]]]]
                                                                    [[0.0]]
                                                                    (Fx $ PoolingLayer 1 3 
-                                                                          (Fx $ ConvolutionalLayer [ [[[-0.3,-0.6,-0.3],[0, 0,0],[0.3,0.6,0.3]]],
-                                                                                                     [[[-0.3, 0, 0.3],[-0.6,0,0.6],[-0.3,0, 0.3]]],
-                                                                                                     [[[0, 0.3, 0.6], [-0.3,0,0.3],[-0.6,-0.3,0]]],
-                                                                                                     [[[0.6, 0.3, 0], [0.3,0,-0.3],[0,-0.3,-0.6]]] ]
+                                                                          (Fx $ ConvolutionalLayer [ [[[0.0,-0.3,-0.6], 
+                                                                                                       [0.3, 0.0,-0.3], 
+                                                                                                       [0.6, 0.3, 0.0]],
+                                                                                                      [[-0.6,-0.3,0.0], 
+                                                                                                       [-0.3,0.0,-0.6], 
+                                                                                                       [0.0, 0.3, 0.6]]],
+                                                                                                     [[[ 0.0, 0.3, 0.6], 
+                                                                                                       [-0.3, 0.0, 0.3],
+                                                                                                       [-0.6,-0.3, 0.0]]],
+                                                                                                     [[[0.6, 0.3, 0.0], 
+                                                                                                       [0.3, 0.0,-0.3],
+                                                                                                       [0.0, -0.3,-0.6]]] ]
                                                                                                     [[0.0],[0.0],[0.0],[0.0]]
                                                                                                     (Fx $ InputLayer)))))
 testdata_x =  [[[ 0.5,-0.5,-0.5,-0.5,-0.5,-0.5, 0.5],
                 [-0.5, 0.5,-0.5,-0.5,-0.5, 0.5,-0.5],
                 [-0.5,-0.5, 0.5,-0.5, 0.5,-0.5,-0.5],
+
+
                 [-0.5,-0.5,-0.5, 0.5,-0.5,-0.5,-0.5],
                 [-0.5,-0.5, 0.5,-0.5, 0.5,-0.5,-0.5],
                 [-0.5, 0.5,-0.5,-0.5,-0.5, 0.5,-0.5],
@@ -327,7 +346,7 @@ flattenImage image = [ [[(i)]] | (i) <- (concat $ concat $ image) ]
 
 compDeltaFullyConnected :: Image -> [[[Double]]] -> (Int, Int, Int) -> Deltas
 compDeltaFullyConnected actualOutput desiredOutput (m, n, v) = 
-    unflatten  (zipWith (\actOutput desOutput -> 0.5 * (( actOutput) - desOutput)) (concat $ concat actualOutput) (concat $ concat desiredOutput)) (m, n, v)
+    unflatten  (zipWith (\actOutput desOutput -> 0.5 * ((actOutput) - desOutput)) (concat $ concat actualOutput) (concat $ concat desiredOutput)) (m, n, v)
     where   unflatten :: [Double] -> (Int, Int, Int) -> Deltas
             unflatten flattened_deltas (m, n, v) 
                                 = map (chunksOf m) (chunksOf (m * n) flattened_deltas)
