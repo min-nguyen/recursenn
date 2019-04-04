@@ -30,7 +30,7 @@ import Text.Show.Functions
 import qualified Vector as V
 import Vector (Vector((:-)))
 import Debug.Trace
-import Convolution
+import Recurrent
 import TestSuite
 
 main = do 
@@ -39,10 +39,11 @@ main = do
      --     slines = map (\y ->  y ++ "\n") (map (head . splitOn ",") ilines)
      -- writeFile "conv_results/oz_labels" $ concat slines
 
-     readDataConv
+     -- readDataConv
 
-     -- dna <- readDNA :: IO [[([Double], [Double])]]
-     -- runDNA dna
+     dna <- readDNA :: IO [[([Double], [Double])]]
+     print dna
+     runDNA dna
      -- runRecurrent'
      -- inputFile <- readFile "fullyconnected_results/sine_data_1400"
      -- outputFile <- readFile "fullyconnected_results/sine_labels_1400"
@@ -56,15 +57,15 @@ main = do
      --print $ show $ runConvolutional
 
 
-readDataConv = do 
-     inputFile <- readFile "conv_results/oz_data"
-     outputFile <- readFile "conv_results/oz_labels"
-     let  inputlines = lines inputFile 
-          outputlines = lines outputFile
-          input = map (\x -> [x]) $ map (chunksOf 7) ((map2 read (map (splitOn ",") inputlines)) ::  [[Double]])
-          output = map ((\x -> [[[x]]]) . read)  outputlines
-          nn = runConvolutionalV3 input output
-     print $ show nn 
+-- readDataConv = do 
+--      inputFile <- readFile "conv_results/oz_data"
+--      outputFile <- readFile "conv_results/oz_labels"
+--      let  inputlines = lines inputFile 
+--           outputlines = lines outputFile
+--           input = map (\x -> [x]) $ map (chunksOf 7) ((map2 read (map (splitOn ",") inputlines)) ::  [[Double]])
+--           output = map ((\x -> [[[x]]]) . read)  outputlines
+--           nn = runConvolutionalV3 input output
+--      print $ show nn 
 
 makeDataFC = do 
      args <- getArgs
@@ -72,7 +73,7 @@ makeDataFC = do
      let linesOfFile = lines content
          numbers = map read linesOfFile
          output  = map sin numbers 
-         output' = map ((\x -> x ++ "\n") . (\z -> formatFloatN z 10)) output
+         output' = map ((\x -> x ++ "\n") . (\z -> formatFloatN z 8)) output
      writeFile "fullyconnected_results/sine_labels_1400" $ concat output'
 
 readDNA :: IO [[([Double], [Double])]]
