@@ -79,16 +79,16 @@ makeDataFC = do
 readDNA :: IO [[([Double], [Double])]]
 readDNA = do 
      formatDNA
-     inputFile <- readFile "rnn_results/dna_300_data"
+     inputFile <- readFile "rnn_results/dna_600_data"
      let linesOfFile = lines inputFile 
          dna = mapDNA linesOfFile
      return dna
      
 formatDNA = do 
-     inputFile <- readFile "rnn_results/dna_300"
+     inputFile <- readFile "rnn_results/dna_600"
      let linesOfFile = lines inputFile
          dna_data = map (\x -> x ++ "\n") $ (filter (\x -> length x == 6) linesOfFile) 
-     writeFile "rnn_results/dna_300_data" $ concat dna_data
+     writeFile "rnn_results/dna_600_data" $ concat dna_data
 
 mapDNA :: [String] -> [[([Double], [Double])]]
 mapDNA s = 
