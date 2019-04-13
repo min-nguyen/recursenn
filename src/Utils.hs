@@ -135,6 +135,7 @@ outerproduct v1 v2 = [ (map (v1_element *) v2) | v1_element <- v1   ]
 -- mvmulkf :: (Num a, F.FixedList f) => [a] -> f [[a]] -> f [a]
 -- mvmulkf vec mat = map (sum . (zipWith (*) vec)) mat
 
+
 mmmul :: Fractional a => [[a]] -> [[a]] -> [[a]]
 mmmul m1 m2 = [ [ sum (zipWith (*) v2 v1)  | v2 <- (transpose m2) ] |  v1 <- m1 ]
 

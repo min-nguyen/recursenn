@@ -140,8 +140,9 @@ coalg (Fx (ConvolutionalLayer filters biases innerLayer), BackProp fps outerDelt
      
 coalg (Fx (PoolingLayer stride spatialExtent innerLayer), BackProp fps outerDeltas outerFilters desiredOutput)
         =   let (output:input:_) = fps
-                (outputImage, inputImage) = (output ^. image,  input ^. image)
-                deltas          = [unpool (length $ head input2d, length $ input2d) output2d positions2d | (input2d, output2d, positions2d) <- zip3 inputImage outputImage (output ^. positions) ]
+                inputImage = input ^. image
+                (input_width, input_height) = (length $ head $ head inputImage, length $ head $ inputImage)
+                deltas          = [unpool (input_width, input_height) positions2d | positions2d <- (output ^. positions) ]
             in   (PoolingLayer stride spatialExtent (innerLayer, BackProp (tail fps) deltas outerFilters desiredOutput) )
 coalg (Fx (ReluLayer innerLayer), BackProp imageStack outerDeltas outerFilters desiredOutput)
         =   let inputImage      = (head (tail imageStack)) ^. image
@@ -332,13 +333,13 @@ pool stride spatialExtent image =
     in  (chunksOf n positions',  chunksOf n image2d')
 --((quot (h - spatialExtent) stride) + 1) $ unzip
 -- verified
-unpool :: (Int, Int) -> Image2D -> [[Position]] -> [[Double]]
-unpool (orig_w, orig_h) image positions = 
+unpool :: (Int, Int) -> [[Position]] -> [[Double]]
+unpool (orig_w, orig_h) positions = 
     let zeros              = replicate orig_h $ replicate orig_w 0.0
-        set'  ls (y:ys)    = let ((m, n), value) = y 
+        set'  ls (y:ys)    = let (m, n) = y 
                              in  set' (replaceElement ls m (replaceElement (ls !! m) n 1.0)) ys
         set'  ls []        = ls
-    in  set' zeros (zip (concat positions) (concat image))
+    in  set' zeros (concat positions)
 
 flattenImage :: Image -> Image
 flattenImage image = [ [[(i)]] | (i) <- (concat $ concat $ image) ]

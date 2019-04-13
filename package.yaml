@@ -33,7 +33,9 @@ dependencies:
 - singletons
 - split
 - lens
+- random
 - fixed-list
+- free
 - nat
 - vector
 - unification-fd

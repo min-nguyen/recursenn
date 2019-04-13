@@ -17,6 +17,7 @@
 
 module FullyConnected2 where
 
+import Control.Monad.Free
 import Utils
 import Data.Functor     
 import Data.Foldable
@@ -66,6 +67,13 @@ data PropData   =
         _outerWeights   :: Weights
                     } deriving (Show)
 makeLenses ''PropData
+
+
+layerr :: Weights -> Biases -> Activation -> Activation' -> Free (Layer) ()
+layerr weights biases act act' = Free (Layer weights biases act act' (Pure ()))
+
+inputlayerr :: Free (Layer) ()
+inputlayerr = Free (InputLayer)
 
 ---- |‾| -------------------------------------------------------------- |‾| ----
  --- | |                          Alg & Coalg                           | | ---

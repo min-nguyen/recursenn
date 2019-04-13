@@ -32,8 +32,10 @@ import Vector (Vector((:-)))
 import Debug.Trace
 import Recurrent
 import TestSuite
-
+import System.Random
 main = do 
+     z <- randomIO :: IO Double
+     print z
      -- conv_output <- readFile "conv_results/oz_data"
      -- let ilines = lines conv_output :: [String]
      --     slines = map (\y ->  y ++ "\n") (map (head . splitOn ",") ilines)
@@ -41,9 +43,9 @@ main = do
 
      -- readDataConv
 
-     dna <- readDNA :: IO [[([Double], [Double])]]
-     print dna
-     runDNA dna
+     -- dna <- readDNA :: IO [[([Double], [Double])]]
+     -- print dna
+     -- runDNA dna
      -- runRecurrent'
      -- inputFile <- readFile "fullyconnected_results/sine_data_1400"
      -- outputFile <- readFile "fullyconnected_results/sine_labels_1400"

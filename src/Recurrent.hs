@@ -163,7 +163,7 @@ coalgLayer (Fx (Layer params cells innerLayer), fps, backProp)
             backProp'           = initBackProp hDim dDim (Just $ deltaXs deltaTotal) (Just $ w)
             showcost            = trace ((\z -> showFullPrecision $ read $ formatFloatN (z/100) 8) $ sum $ map abs $ concat $ deltaW deltaTotal) 
 
-        in  case innerLayer of (Fx (InputLayer)) ->  showcost $  updateParameters (Layer params cell (innerLayer, tail fps, backProp')) deltaTotal
+        in  case innerLayer of (Fx (InputLayer)) ->   updateParameters (Layer params cell (innerLayer, tail fps, backProp')) deltaTotal
                                _             -> showcost (updateParameters (Layer params cell (innerLayer, tail fps, backProp')) deltaTotal)
 
 algCell ::  Cell (Fix Cell, [ForwardProp] -> [ForwardProp]) -> (Fix Cell, [ForwardProp] -> [ForwardProp]) -- use forwardprop storing inputs, instead of Inputs?
@@ -192,20 +192,25 @@ coalgCell (Fx cell, forwardProps, backProp)
         (gate, updatedState)    = (fp ^. gates, fp ^. prevState)
         (weightsW, weightsU)    = mapT2 (V.foldr (++) [[]]) (fp^.params._1, fp^.params._2)
 
-        BackProp dState_next deltaOut_next deltaGates_next f_next _ _ = backProp
+        BackProp dState_next deltaOut_next deltaGates_next f_next nextLayer_dxs _ = backProp
 
-        error = (elesub (fp^.output)  (fp^.label))
-
+        error = case nextLayer_dxs of Nothing -> (elesub (fp^.output)  (fp^.label)) 
+                                      Just dxs -> (head dxs)
         dOut =  
             case (cell, backProp ^. nextLayerWs, backProp ^. nextLayerDXs) 
-            of  (EndCell {},Nothing, _)  -> (elesub (fp^.output)  (fp^.label)) 
-                (Cell {},   Nothing, _)  -> eleadd deltaOut_next (elesub (fp^.output)  (fp^.label))
+            of  (EndCell {},Nothing, _)  -> error 
+                (Cell {},   Nothing, _)  -> eleadd deltaOut_next error
                 (_, Just w, Just dX)     -> elemul (mvmul  (transpose $ V.foldr (++) [[]] w) (head dX)) (fp ^. output) 
         
         deltaState = eleadd (elemul3 dOut (gate ! 4) (map (sub1 . sqr . tanh) updatedState)) (elemul dState_next f_next)
         deltaGates = compDGates gate dOut deltaState updatedState lastState 
-        (deltaX, deltaOut)     = mapT2 (mvmulk deltaGates . transpose) (weightsW, weightsU)
 
+        -- applyDeltaX = case nextLayer_dxs of Nothing -> id 
+        --                                     Just dxs -> ((\f -> [f]) . (dot (head dxs)))
+        -- deltaXStack = case nextLayer_dxs of Nothing -> Nothing 
+        --                                     Just dxs -> Just (tail dxs)
+        deltaOut   = mvmulk deltaGates (transpose weightsU)
+        deltaX     = mvmulk deltaGates (transpose weightsW) 
         deltaW     = outerProduct deltaGates (fp^.x) 
         deltaU     = 
             case cell
@@ -322,7 +327,7 @@ runRecurrent' = print $ show $ runLayer example' sample
                          
 runDNA :: [[([Double], [Double])]] -> IO ()
 runDNA samples = do 
-    print $ show $ trains example' samples
+    print $ show $ trains example samples
 
 runCell :: Layer k -> Layer k 
 runCell InputLayer = InputLayer
