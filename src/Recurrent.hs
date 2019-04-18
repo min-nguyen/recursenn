@@ -163,7 +163,7 @@ coalgLayer (Fx (Layer params cells innerLayer), fps, backProp)
             backProp'           = initBackProp hDim dDim (Just $ deltaXs deltaTotal) (Just $ w)
             showcost            = trace ((\z -> showFullPrecision $ read $ formatFloatN (z/100) 8) $ sum $ map abs $ concat $ deltaW deltaTotal) 
 
-        in  case innerLayer of (Fx (InputLayer)) ->  showcost $  updateParameters (Layer params cell (innerLayer, tail fps, backProp')) deltaTotal
+        in  case innerLayer of (Fx (InputLayer)) -> showcost $  updateParameters (Layer params cell (innerLayer, tail fps, backProp')) deltaTotal
                                _             -> showcost (updateParameters (Layer params cell (innerLayer, tail fps, backProp')) deltaTotal)
 
 algCell ::  Cell (Fix Cell, [ForwardProp] -> [ForwardProp]) -> (Fix Cell, [ForwardProp] -> [ForwardProp]) -- use forwardprop storing inputs, instead of Inputs?
@@ -263,8 +263,8 @@ updateParameters layer delta_total
             w = concat $ V.toList weights_w
             u = concat $ V.toList weights_u
             b = concat $ V.toList biases
-            w'     = V.fromList $ map cons $ --elesubm w (map2 (0.1 *) deltaW_total) 
-                                             (elesubm (elesubm w (map2 (0.1 *) deltaW_total)) (replicate 4 (head deltaXs)))
+            w'     = V.fromList $ map cons $ elesubm w (map2 (0.1 *) deltaW_total) 
+                                            -- (elesubm (elesubm w (map2 (0.1 *) deltaW_total)) (replicate 4 (head deltaXs)))
            
             u'     = V.fromList $ map cons $ elesubm u (map2 (0.1 *) deltaU_total)
             b'     = V.fromList $ map cons $ elesub  b (map (0.1 *)  deltaB_total)
