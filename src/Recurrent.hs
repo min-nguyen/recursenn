@@ -48,11 +48,10 @@ type HyperParameters = (Weights, Weights, Biases)
 
 data ForwardProp = ForwardProp {
                         _gates       :: Gates,
-                        _x           :: [Double],
-                        _h           :: [Double],
-                        _label       :: Label,
+                        _input       :: [Double],
+                        _des_out     :: Label,
                         _output      :: [Double],
-                        _prevState   :: [Double], -- change this to just state
+                        _state       :: [Double], -- change this to just state
                         _params      :: HyperParameters,
                         _inputStack  :: Inputs
                     } deriving Show
@@ -63,8 +62,7 @@ data BackProp   = BackProp {
                         _nextDOut           :: [Double], 
                         _nextDGates         :: [Double],  
                         _nextF              :: [Double],
-                        _nextLayerDXs       :: Maybe [[Double]],
-                        _nextLayerWs        :: Maybe Weights
+                        _nextLayerDXs       :: Maybe [[Double]]
                     } deriving Show
 makeLenses ''BackProp
 
@@ -88,13 +86,11 @@ instance Show Deltas where
 data Cell  k =   Cell {   
                         _cellState   :: State,
                         _cellDeltas  :: Deltas,
-                        _errorForTesting :: [Double],
                         _innerCell   :: k
                      }
                 | EndCell {
                         _cellState   :: State,
                         _cellDeltas  :: Deltas,
-                        _errorForTesting :: [Double],
                         _innerCell   :: k
                      }
                 | InputCell  deriving (Functor)
@@ -109,10 +105,10 @@ data Layer k =  Layer {
 makeLenses ''Layer
 
 instance Show k => Show (Cell k) where 
-    show (Cell cstate cdeltas err inner_cell ) =
+    show (Cell cstate cdeltas  inner_cell ) =
         "Cell: \n" ++ "State: " ++ show cstate ++ "\n" ++ "Deltas: " ++ show cdeltas ++ "\n"
         ++ show inner_cell
-    show (EndCell cstate cdeltas err inner_cell ) =
+    show (EndCell cstate cdeltas  inner_cell ) =
         "EndCell: \n" ++ "State: " ++ show cstate ++ "\n" ++ "Deltas: " ++ show cdeltas ++ "\n"
         ++ show inner_cell 
     show InputCell = "InputCell \n"
@@ -130,22 +126,21 @@ trains neuralnet samples
                   let updatedNetwork = runLayer nn sample 
                   in  updatedNetwork) neuralnet samples
 
-
 runLayer :: Fix Layer  -> Inputs -> Fix Layer
 runLayer layer sample = let f = \(layer', forwardProp') -> (layer', forwardProp' sample, (initBackProp 1 2 Nothing Nothing))
                          in  meta algLayer f coalgLayer layer
 
 algLayer :: Layer (Fix Layer, Inputs -> [[ForwardProp]]) -> (Fix Layer, Inputs -> [[ForwardProp]])
-algLayer InputLayer = (Fx InputLayer, (\sample -> cons [ForwardProp emptyGates [] [] l x [0] emptyParams sample | (x,l) <- sample  ]))
+algLayer InputLayer = (Fx InputLayer, (\sample -> cons [ForwardProp emptyGates [] l x [0] emptyParams sample | (x,l) <- sample  ]))
 algLayer (Layer params cells (innerLayer, nextForwardProp))
     = let forwardProp  = (\fps ->
                     let fp = head fps
-                        inputs = map tuplify2 $ chunksOf 2 $ fp <**> [(^.output), (^.label)] 
+                        inputs = map tuplify2 $ chunksOf 2 $ fp <**> [(^.output), (^.des_out)] 
                         (hDim, dDim)       = let w = params^._1 in (length $ w ! 1, length $ head $ w ! 1)
                         initialForwardProp = initForwardProp hDim dDim params inputs
                         (cell, fpFunc)     = cata algCell cells 
                         layerFP            = fpFunc [initialForwardProp]
-                        showinputs =  map (\l -> l ^. x) layerFP
+                        showinputs =  map (\l -> l ^. input) layerFP
                         showoutputs =  map (\l -> l ^. output) layerFP
                     in  --trace (show showinputs ++ "\n" ++ show showoutputs) 
                         (layerFP:fps)) . nextForwardProp
@@ -157,9 +152,9 @@ coalgLayer (Fx InputLayer, fp, bp)
 coalgLayer (Fx (Layer params cells innerLayer), fps, backProp)
     =   let w                   = params^._1
             (hDim, dDim)        = (length $ w ! 1, length $ head $ w ! 1)
-            (cell, (errorFunc, deltaFunc))   = hylo algCell2 coalgCell (cells, head fps, backProp)
+            (cell, deltaFunc)   = hylo algCell2 coalgCell (cells, head fps, backProp)
             deltaTotal          = deltaFunc (initDelta hDim dDim)
-            errorTotal          = errorFunc ([0.0])
+
             backProp'           = initBackProp hDim dDim (Just $ deltaXs deltaTotal) (Just $ w)
             showcost            = trace ((\z -> showFullPrecision $ read $ formatFloatN (z/100) 8) $ sum $ map abs $ concat $ deltaW deltaTotal) 
 
@@ -175,9 +170,9 @@ algCell cell
                 let fp = head fps
                     (x, label) = head (fp^.inputStack)
                     gates   = compGates (fp^.params) x (fp^.output)
-                    state'  = eleadd (elemul (gates ! 3) (gates ! 2)) (elemul (gates ! 1) (fp^.prevState))
+                    state'  = eleadd (elemul (gates ! 3) (gates ! 2)) (elemul (gates ! 1) (fp^.state))
                     output' = elemul (gates ! 4) (map tanh state')
-                in  ((ForwardProp gates x  (fp^.output) label output' state'  (fp^.params) (tail (fp^.inputStack))):fps)) . forwardProps
+                in  ((ForwardProp gates x label output' state'  (fp^.params) (tail (fp^.inputStack))):fps)) . forwardProps
       in  (Fx (cell & innerCell .~ nextCell), forwardProps')
 
 
@@ -188,25 +183,24 @@ coalgCell (Fx InputCell, forwardProps, backProp)
     = InputCell
 coalgCell (Fx cell, forwardProps, backProp)
   = let fp = head forwardProps
-        lastState               = (head (tail forwardProps)) ^. prevState 
-        (gate, updatedState)    = (fp ^. gates, fp ^. prevState)
+        lastState               = (head (tail forwardProps)) ^. state 
+        (gate, updatedState)    = (fp ^. gates, fp ^. state)
         (weightsW, weightsU)    = mapT2 (V.foldr (++) [[]]) (fp^.params._1, fp^.params._2)
 
-        BackProp dState_next deltaOut_next deltaGates_next f_next _ _ = backProp
+        BackProp dState_next deltaOut_next deltaGates_next f_next _  = backProp
 
-        error = (elesub (fp^.output)  (fp^.label))
+        error = (elesub (fp^.output)  (fp^.des_out))
 
         dOut =  
-            case (cell, backProp ^. nextLayerWs, backProp ^. nextLayerDXs) 
-            of  (EndCell {},Nothing, _)  -> (elesub (fp^.output)  (fp^.label)) 
-                (Cell {},   Nothing, _)  -> eleadd deltaOut_next (elesub (fp^.output)  (fp^.label))
-                (_, Just w, Just dX)     -> elemul (mvmul  (transpose $ V.foldr (++) [[]] w) (head dX)) (fp ^. output) 
-        
+            case (cell) 
+            of  (EndCell {})  -> (elesub (fp^.output)  (fp^.des_out)) 
+                (Cell {})     -> eleadd deltaOut_next (elesub (fp^.output)  (fp^.des_out))
+
         deltaState = eleadd (elemul3 dOut (gate ! 4) (map (sub1 . sqr . tanh) updatedState)) (elemul dState_next f_next)
         deltaGates = compDGates gate dOut deltaState updatedState lastState 
         (deltaX, deltaOut)     = mapT2 (mvmulk deltaGates . transpose) (weightsW, weightsU)
 
-        deltaW     = outerProduct deltaGates (fp^.x) 
+        deltaW     = outerProduct deltaGates (fp^.input) 
         deltaU     = 
             case cell
             of  EndCell {} -> fillMatrix (length deltaGates) (quot (length deltaGates) 4) 0.0
@@ -224,14 +218,14 @@ coalgCell (Fx cell, forwardProps, backProp)
         (cell & cellState .~ updatedState
               & cellDeltas .~ (Deltas deltaW deltaU deltaB [deltaX])
               & innerCell .~ (fromJust (cell ^? innerCell), tail forwardProps, backProp')
-              & errorForTesting .~ error)
+              )
             
-algCell2 ::  Cell (Fix Cell,  ([Double] -> [Double], Deltas -> Deltas)) ->  (Fix Cell, ([Double] -> [Double], Deltas -> Deltas))
+algCell2 ::  Cell (Fix Cell,  (Deltas -> Deltas)) ->  (Fix Cell, (Deltas -> Deltas))
 algCell2 InputCell 
-    = (Fx InputCell, (id, id))
+    = (Fx InputCell, id)
 algCell2 cell
-    =   let (state, deltas, (nextCell, (errorTotalFunc, deltaTotalFunc))) = (_cellState cell, _cellDeltas cell, _innerCell cell)
-            error = cell ^. errorForTesting
+    =   let (state, deltas, (nextCell, deltaTotalFunc)) = (_cellState cell, _cellDeltas cell, _innerCell cell)
+
             Deltas deltaW1 deltaU1 deltaB1 deltaXs1 = deltas
             deltaTotalFunc' = (\deltaTotal -> 
                 let Deltas deltaW2 deltaU2 deltaB2 deltaXs2 = deltaTotal
@@ -240,8 +234,8 @@ algCell2 cell
                     deltaB_total = (eleadd deltaB1 deltaB2)
                     deltaXs      = deltaXs1 ++ deltaXs2
                 in Deltas deltaW_total deltaU_total deltaB_total deltaXs) . deltaTotalFunc
-            errorTotalFunc' = (\err -> zipWith (+) err error) . errorTotalFunc
-        in  (Fx (cell {_innerCell = nextCell}), (errorTotalFunc', deltaTotalFunc')) --
+
+        in  (Fx (cell {_innerCell = nextCell}), deltaTotalFunc') --
 
 compGates :: HyperParameters -> [Double] -> [Double] -> Gates
 compGates (weightsW, weightsU, biases) x h 
@@ -276,11 +270,12 @@ emptyGates  = (V.fromList (replicate 4 []))
 
 initForwardProp :: Int -> Int -> HyperParameters -> Inputs -> ForwardProp
 initForwardProp h d params sample 
-    = ForwardProp (V.fromList (replicate 4 [])) [] [] [] (replicate h 0.0) (replicate h 0.0) params sample
+
+    = ForwardProp (V.fromList (replicate 4 [])) [] [] (replicate h 0.0) (replicate h 0.0) params sample
 
 initBackProp :: Int -> Int -> Maybe [[Double]] -> Maybe Weights -> BackProp
 initBackProp h d deltaX weights 
-    = BackProp (replicate h 0) (replicate h 0) (replicate (h*d) 0) (replicate h 0) deltaX weights
+    = BackProp (replicate h 0) (replicate h 0) (replicate (h*d) 0) (replicate h 0) deltaX 
 
 initDelta :: Int -> Int -> Deltas
 initDelta h d = Deltas (fillMatrix (4 * h) (d) 0.0) (fillMatrix (4 * h) (h) 0.0) (replicate  (4 * h) 0.0) [[]]
@@ -288,30 +283,30 @@ initDelta h d = Deltas (fillMatrix (4 * h) (d) 0.0) (fillMatrix (4 * h) (h) 0.0)
 example =   Fx (Layer (V.fromList [[[0.7]],  [[0.95]],  [[0.45]],   [[0.6]]],
                        V.fromList [[[0.2]]      ,  [[0.8]]      ,   [[0.15]]   ,    [[0.25]]],
                        V.fromList [[0.0]       , [0.0]        , [0.0]        ,    [0.0]])
-                       (Fx (EndCell [0.0] NoDeltas [0]
-                            (Fx (Cell [0] NoDeltas  [0]
-                                (Fx (Cell [0] NoDeltas [0]
-                                    (Fx (Cell [0] NoDeltas [0] 
-                                        (Fx (Cell [0] NoDeltas [0] 
+                       (Fx (EndCell [0.0] NoDeltas
+                            (Fx (Cell [0] NoDeltas 
+                                (Fx (Cell [0] NoDeltas 
+                                    (Fx (Cell [0] NoDeltas
+                                        (Fx (Cell [0] NoDeltas
                                             (Fx InputCell)))))))))))
             (Fx (Layer (V.fromList [[[0.45]],  [[0.8]],  [[0.25]],   [[0.4]]],
                      V.fromList [[[0.6]]      ,  [[0.3]]      ,   [[0.3]]     ,    [[0.7]]],
                      V.fromList [[0.0]       , [0.0]         , [0.0]        ,    [0.0]])
-                     (Fx (EndCell [0.0] NoDeltas [0]
-                        (Fx (Cell [0] NoDeltas  [0]
-                            (Fx (Cell [0] NoDeltas [0]
-                                (Fx (Cell [0] NoDeltas [0] 
-                                    (Fx (Cell [0] NoDeltas [0] 
+                     (Fx (EndCell [0.0] NoDeltas
+                        (Fx (Cell [0] NoDeltas 
+                            (Fx (Cell [0] NoDeltas 
+                                (Fx (Cell [0] NoDeltas  
+                                    (Fx (Cell [0] NoDeltas 
                                         (Fx InputCell))))))))))) (Fx InputLayer))))
 example' =   
             (Fx (Layer (V.fromList [[[0.7]],  [[0.95]],  [[0.45]],   [[0.6]]],
                      V.fromList [[[0.1]]      ,  [[0.8]]      ,   [[0.15]]     ,    [[0.25]]],
                      V.fromList [[0.15]       , [0.65]         , [0.2]        ,    [0.1]])
-                    (Fx (EndCell [0.0] NoDeltas [0]
-                        (Fx (Cell [0] NoDeltas  [0]
-                            (Fx (Cell [0] NoDeltas [0]
-                                (Fx (Cell [0] NoDeltas [0] 
-                                    (Fx (Cell [0] NoDeltas [0] 
+                    (Fx (EndCell [0.0] NoDeltas 
+                        (Fx (Cell [0] NoDeltas  
+                            (Fx (Cell [0] NoDeltas 
+                                (Fx (Cell [0] NoDeltas 
+                                    (Fx (Cell [0] NoDeltas 
                                         (Fx InputCell))))))))))) (Fx InputLayer)))
 
 -- runRecurrent = print $ show $ runLayer example sample
@@ -335,7 +330,7 @@ runCell (Layer params cells innerLayer)
           initialBackProp    = initBackProp hDim dDim Nothing Nothing
           initialDeltaTotal  = initDelta  hDim dDim
 
-          (cellf, (errorTotalFunc, deltaTotalFunc)) = 
+          (cellf, deltaTotalFunc) = 
                                     let h =  (\(c, f) -> (c, f [initialForwardProp], initialBackProp))
 
                                     in  ((cata algCell2) . (meta algCell h coalgCell)) cells
