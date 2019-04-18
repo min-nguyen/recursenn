@@ -63,6 +63,7 @@ data BackProp   = BackProp {
                         _nextDGates         :: [Double],  
                         _nextF              :: [Double],
                         _nextLayerDXs       :: Maybe [[Double]]
+                        
                     } deriving Show
 makeLenses ''BackProp
 
