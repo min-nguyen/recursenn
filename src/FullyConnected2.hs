@@ -28,6 +28,8 @@ import qualified Vector as V
 import Vector (Vector((:-)))
 import Debug.Trace
 import Control.Lens
+import Control.Monad
+import Control.Monad.Trans.Class
 import Data.Maybe
 import Control.Lens.Tuple
 ---- |‾| -------------------------------------------------------------- |‾| ----
@@ -166,40 +168,24 @@ construct []       = Fx InputLayer
 
 -- cataforward neuralnet sample desiredoutput = (snd (cata alg neuralnet)) sample
 
+example :: IO (Fix Layer)
+example =  do 
+    weights_a <- randMat2D 3 3 
+    weights_b <- randMat2D 3 3 
+    weights_c <- randMat2D 1 3 
+    let biases = replicate 3 0
+        fc_network = (Fx ( Layer weights_c biases sigmoid sigmoid'
+                        (Fx ( Layer  weights_b biases sigmoid sigmoid'
+                            (Fx ( Layer  weights_a biases sigmoid sigmoid'
+                                (Fx   InputLayer ) ) ) ) )))
+    return fc_network
 
-example =  (Fx ( Layer [[0.4, 0.1, 0.3]] [0, 0, 0] sigmoid sigmoid'
-            (Fx ( Layer  [[0.1,0.2,0.5],[0.4,0.2,0.4],[0.3,0.8,0.12]] [0, 0, 0] sigmoid sigmoid'
-            (Fx ( Layer  [[0.3,0.6,0.15],[0.2,0.1,0.7],[0.6,0.5,0.2]] [0, 0, 0] sigmoid sigmoid'
-             (Fx   InputLayer ) ) ) ) )))
-
-example' =  (Fx ( Layer [[4.0,0.5,2.0],[1.0,1.0,2.0],[3.0,0.0,4.0]] [0, 0, 0] sigmoid sigmoid'
-            (Fx ( Layer  [[3.0,6.0,2.0],[2.0,1.0,7.0],[6.0,5.0,2.0]] [0, 0, 0] sigmoid sigmoid'
-             (Fx   InputLayer ) ) ) ) )
-
-
-runFullyConnected = print $ show $ let nn = (train example [-0.5, 0.2, 0.5] [0.0, 1.0, 0.0]) 
-                                   in nn -- train nn loss [1.0, 2.0, 0.2] [-26.0, 5.0, 3.0]
-
--- runFullyConnectedForward = cataforward example [[-0.5, 0.2, 0.5]] [0.0, 1.0, 0.0]
-
-runSineNetwork samples desiredoutputs = trains example samples desiredoutputs -- [[0.3, 0.3, 0.3], [0.3, 0.3, 0.3]] [[0.85],[0.991]]
-
-exampleSineNetwork = Fx ( Layer w2 b2 sigmoid sigmoid' 
-                        (Fx (Layer w1 b1 sigmoid sigmoid' 
-                            (Fx InputLayer))))
-                    where w1 = [[0.12,0.87,0.28,0.39,0.40,0.88,0.07,0.85,0.12,0.10],
-                                [0.81,0.59,0.71,0.87,0.68,0.73,0.39,0.29,0.07,0.58],
-                                [0.89, 0.45,0.91,0.60,0.61,0.81,0.34,0.09,0.78,0.75],
-                                [0.12,0.53,0.72,0.15,0.21,0.34,0.79,0.98,0.92,0.97],
-                                [0.54,0.92,0.50,0.48,0.60,0.77,0.43,0.76,0.37,0.19],
-                                [0.76,0.21,0.84,0.17,0.39,0.38,0.84,0.72,0.24,0.34],
-                                [0.98,0.09,0.32,0.11,0.80,0.78,0.90,0.53,0.42,0.32],
-                                [0.82,0.76,0.50,0.10,0.29,0.20,0.96,0.23,0.92,0.32],
-                                [0.97,0.52,0.00,0.70,0.68,0.33,0.42,0.47,0.27,0.37],
-                                [0.61,0.79,0.96,0.19,0.74,0.30,0.36,0.63,0.44,0.80]]
-                          w2 =  [[0.19,0.58,0.64,0.18,0.50,0.08,0.40,0.65,0.52,0.21]]  
-                          b1  = [0,0,0,0,0,0,0,0,0,0]
-                          b2  = [0]                            
+runFCNetwork :: [[Double]] -> [[Double]] -> IO (Fix Layer)
+runFCNetwork samples desiredoutputs = do 
+    network <- example 
+    let trained_network = trains network samples desiredoutputs 
+    return trained_network
+                            
 -- 0.668187772
 -- 0.937026644
 -- 0.2689414214

@@ -45,26 +45,26 @@ main = do
      -- print dna
      -- runDNA dna
      -- runRecurrent'
-     -- inputFile <- readFile "fullyconnected_results/sine_data_1400"
-     -- outputFile <- readFile "fullyconnected_results/sine_labels_1400"
+     -- inputFile <- readFile "fullyconnected_results/sine_data_800"
+     -- outputFile <- readFile "fullyconnected_results/sine_labels_800"
      -- let inputlines = lines inputFile
      --     outputlines = lines outputFile
      --     input = map read inputlines :: [Double]
      --     output = map read outputlines :: [Double]
 
-     --     nn = runSineNetwork (map (\x ->  replicate 3 x) input) (map (\x -> [x]) output)
-     -- print $ show nn
+     -- fc_network <- runFCNetwork (map (\x ->  replicate 3 x) input) (map (\x -> [x]) output)
+     -- print $ show fc_network
      --print $ show $ runConvolutional
 
 
 readDataConv = do 
-     inputFile <- readFile "conv_results/oz_data_600"
-     outputFile <- readFile "conv_results/oz_labels_600"
+     inputFile <- readFile "conv_results/oz_data_300"
+     outputFile <- readFile "conv_results/oz_labels_300"
      let  inputlines = lines inputFile 
           outputlines = lines outputFile
           input = map (\x -> [x]) $ map (chunksOf 7) ((map2 read (map (splitOn ",") inputlines)) ::  [[Double]])
           output = map ((\x -> if x == 0 then [[[1]], [[0]]] else [[[0]], [[1]]]) . read)  outputlines
-          nn = runConvolutionalV3 input output
+     nn <- runConvolutional input output
      print $ show nn 
 
 makeDataFC = do 

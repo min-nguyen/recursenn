@@ -24,6 +24,8 @@ import Debug.Trace
 import Data.Maybe
 import Data.These
 import Numeric
+import System.Random
+import Data.List.Split
 
 -- import qualified Data.Functor.Fixedpoint    as F
 import Data.List (transpose)
@@ -264,3 +266,22 @@ showFullPrecision x = showFFloat Nothing x ""
 reverseList :: [a] -> [a]
 reverseList [] = []
 reverseList (x:xs) =  x:reverseList xs
+
+
+randMat2D :: Int -> Int -> IO [[Double]]
+randMat2D m n = do
+    xs <- sequence $ replicate (m*n) $ (randomIO :: IO Double)
+    let mat = chunksOf n xs 
+    return mat
+
+randMat3D :: Int -> Int -> Int -> IO [[[Double]]]
+randMat3D m n p = do 
+    xs <- sequence $ replicate p $ randMat2D m n
+    return xs
+
+randMat4D :: Int -> Int -> Int -> Int -> IO [[[[Double]]]]
+randMat4D m n p q = do 
+    xs <- sequence $ replicate q $ randMat3D m n p
+    return xs
+    
+    

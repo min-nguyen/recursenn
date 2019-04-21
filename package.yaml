@@ -30,13 +30,16 @@ dependencies:
 - recursion-schemes
 - align
 - these
+- monad-control
 - singletons
 - split
 - lens
 - fixed-list
 - nat
 - vector
+- transformers
 - unification-fd
+- random
 - Vec
 # - GHC-Types
 library:
