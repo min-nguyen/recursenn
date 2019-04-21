@@ -166,24 +166,6 @@ trains neuralnet samples desiredoutputs
                   let updatedNetwork = train nn (ForwardProp sample [[[]]]) desiredoutput
                   in  updatedNetwork) neuralnet (zip samples desiredoutputs)
 
-
-pad = convoluteDeltaX (head [[[0.5, -0.5], [-0.5, 0.5]], 
-                            [[0.8, 0.8], [-0.8, 0.8]], 
-                            [[1.0, -1.0], [1.0, -1.0]]]) (([[[0.2, 0.6, 0.7,0.3],       [-0.1, 0.5, 0.25, 0.5],  [0.75, -0.5, -0.8, 0.4] , [-0.1, 0.5, 0.25, 0.5]],
-                                                            [[-0.35, 0.3, 0.8, 0.0],    [0.2, 0.2, 0.0, 1.0],    [-0.1, -0.4, -0.1, -0.4], [-0.1, 0.5, 0.25, 0.5]],
-                                                            [[0.25, 0.25, -0.25, -0.25],[0.5, 0.8, 0.12, -0.12], [0.34, -0.34, -0.9, 0.65], [-0.1, 0.5, 0.25, 0.5]]] )) 1
-
-example = Fx (FullyConnectedLayer (Fx $ PoolingLayer 1 2 (  Fx $ ConvolutionalLayer [[[[0.5, -0.5], [-0.5, 0.5]], 
-                                                                                      [[0.8, 0.8], [-0.8, 0.8]]], 
-                                                                                     [[[0.2, -0.1], [0.5, 0.5]], 
-                                                                                      [[0.3, -0.8], [-0.1, 0.0]]]] [[0.0], [0.0]]
-                                                         (  Fx $ ConvolutionalLayer [[[[0.5, -0.5], [-0.5, 0.5]], 
-                                                                                      [[0.8, 0.8], [-0.8, 0.8]], 
-                                                                                      [[1.0, -1.0], [1.0, -1.0]]], 
-                                                                                     [[[0.2, -0.1], [0.5, 0.5]], 
-                                                                                      [[0.3, -0.8], [-0.1, 0.3]], 
-                                                                                      [[0.0, -0.3], [0.3, -0.0]]]] [[0.0], [0.0]] (Fx $ InputLayer)))))
-
 neuralnet :: IO (Fix Layer)                                                                                    
 neuralnet = do 
     weights_a <- randMat4D 3 3 4 1

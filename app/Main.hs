@@ -43,8 +43,8 @@ main = do
 
      -- dna <- readDNA :: IO [[([Double], [Double])]]
      -- print dna
-     -- runDNA dna
-     -- runRecurrent'
+     -- runRecurrent dna
+
      -- inputFile <- readFile "fullyconnected_results/sine_data_800"
      -- outputFile <- readFile "fullyconnected_results/sine_labels_800"
      -- let inputlines = lines inputFile

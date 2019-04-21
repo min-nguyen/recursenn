@@ -168,8 +168,8 @@ construct []       = Fx InputLayer
 
 -- cataforward neuralnet sample desiredoutput = (snd (cata alg neuralnet)) sample
 
-example :: IO (Fix Layer)
-example =  do 
+neuralnet :: IO (Fix Layer)
+neuralnet =  do 
     weights_a <- randMat2D 3 3 
     weights_b <- randMat2D 3 3 
     weights_c <- randMat2D 1 3 
@@ -182,7 +182,7 @@ example =  do
 
 runFCNetwork :: [[Double]] -> [[Double]] -> IO (Fix Layer)
 runFCNetwork samples desiredoutputs = do 
-    network <- example 
+    network <- neuralnet 
     let trained_network = trains network samples desiredoutputs 
     return trained_network
                             

@@ -285,7 +285,8 @@ initBackProp h d deltaX deltaGates
 initDelta :: Int -> Int -> Deltas
 initDelta h d = Deltas (fillMatrix (4 * h) (d) 0.0) (fillMatrix (4 * h) (h) 0.0) (replicate  (4 * h) 0.0) [[]] [[]]
 
-example =   Fx (Layer (V.fromList [[[0.7]],  [[0.95]],  [[0.45]],   [[0.6]]],
+
+deep_lstm =   Fx (Layer (V.fromList [[[0.7]],  [[0.95]],  [[0.45]],   [[0.6]]],
                        V.fromList [[[0.2]]      ,  [[0.8]]      ,   [[0.15]]   ,    [[0.25]]],
                        V.fromList [[0.0]       , [0.0]        , [0.0]        ,    [0.0]])
                        (Fx (EndCell [0] NoDeltas
@@ -303,7 +304,7 @@ example =   Fx (Layer (V.fromList [[[0.7]],  [[0.95]],  [[0.45]],   [[0.6]]],
                                 (Fx (Cell [0] NoDeltas  
                                     (Fx (Cell [0] NoDeltas 
                                         (Fx InputCell))))))))))) (Fx InputLayer))))
-example' =   
+lstm =   
             (Fx (Layer (V.fromList [[[0.7]],  [[0.95]],  [[0.45]],   [[0.6]]],
                      V.fromList [[[0.1]]      ,  [[0.8]]      ,   [[0.15]]     ,    [[0.25]]],
                      V.fromList [[0.15]       , [0.65]         , [0.2]        ,    [0.1]])
@@ -314,15 +315,10 @@ example' =
                                     (Fx (Cell [0] NoDeltas 
                                         (Fx InputCell))))))))))) (Fx InputLayer)))
 
--- runRecurrent = print $ show $ runLayer example sample
---             where sample =  [([0.8,0.4],[0.5]),([0.5,0.1], [0.25])]
-                         
-runRecurrent' = print $ show $ runLayer example' sample
-            where sample =  [([1, 2],[0.5]),([0.5, 3], [1.25])]
-                         
-runDNA :: [[([Double], [Double])]] -> IO ()
-runDNA samples = do 
-    print $ show $ trains example samples
+               
+runRecurrent :: [[([Double], [Double])]] -> IO ()
+runRecurrent samples = do 
+    print $ show $ trains deep_lstm samples
 
 runCell :: Layer k -> Layer k 
 runCell InputLayer = InputLayer
