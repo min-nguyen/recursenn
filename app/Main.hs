@@ -30,7 +30,7 @@ import Text.Show.Functions
 import qualified Vector as V
 import Vector (Vector((:-)))
 import Debug.Trace
-import Recurrent
+import Convolution
 import TestSuite
 
 main = do 
@@ -39,11 +39,11 @@ main = do
      --     slines = map (\y ->  y ++ "\n") (map (head . splitOn ",") ilines)
      -- writeFile "conv_results/oz_labels" $ concat slines
 
-     -- readDataConv
+     readDataConv
 
-     dna <- readDNA :: IO [[([Double], [Double])]]
-     print dna
-     runDNA dna
+     -- dna <- readDNA :: IO [[([Double], [Double])]]
+     -- print dna
+     -- runDNA dna
      -- runRecurrent'
      -- inputFile <- readFile "fullyconnected_results/sine_data_1400"
      -- outputFile <- readFile "fullyconnected_results/sine_labels_1400"
@@ -57,15 +57,15 @@ main = do
      --print $ show $ runConvolutional
 
 
--- readDataConv = do 
---      inputFile <- readFile "conv_results/oz_data"
---      outputFile <- readFile "conv_results/oz_labels"
---      let  inputlines = lines inputFile 
---           outputlines = lines outputFile
---           input = map (\x -> [x]) $ map (chunksOf 7) ((map2 read (map (splitOn ",") inputlines)) ::  [[Double]])
---           output = map ((\x -> [[[x]]]) . read)  outputlines
---           nn = runConvolutionalV3 input output
---      print $ show nn 
+readDataConv = do 
+     inputFile <- readFile "conv_results/oz_data_600"
+     outputFile <- readFile "conv_results/oz_labels_600"
+     let  inputlines = lines inputFile 
+          outputlines = lines outputFile
+          input = map (\x -> [x]) $ map (chunksOf 7) ((map2 read (map (splitOn ",") inputlines)) ::  [[Double]])
+          output = map ((\x -> if x == 0 then [[[1]], [[0]]] else [[[0]], [[1]]]) . read)  outputlines
+          nn = runConvolutionalV3 input output
+     print $ show nn 
 
 makeDataFC = do 
      args <- getArgs

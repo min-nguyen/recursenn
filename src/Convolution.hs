@@ -117,7 +117,7 @@ coalg (Fx (FullyConnectedLayer innerLayer), BackProp fps outerDeltas outerFilter
 
                 deltas       = compDeltaFullyConnected outputImage desiredOutput (m, n, v)
                 
-            in  trace ((\z -> showFullPrecision  $ abs $ read $ formatFloatN (z/100) 8) $ head $ head $ head deltas) $ 
+            in  --trace ((\z -> showFullPrecision  $ abs $ read $ formatFloatN (z/100) 8) $ head $ head $ head deltas) $
                             FullyConnectedLayer (innerLayer, BackProp (tail fps) deltas outerFilters desiredOutput)
 
 coalg (Fx (ConvolutionalLayer filters biases innerLayer), BackProp fps outerDeltas outerFilters desiredOutput)
@@ -188,31 +188,56 @@ neuralnet = Fx (FullyConnectedLayer  (  Fx $ ConvolutionalLayer [--[[[1, 2, 1], 
                                                                    --[[1, 0,-1], [2, 0, 2], [1, 0,-1]], 
                                                                    --[[1, 1, 1], [0, 0, 0], [-1,-1,-1]],
                                                                    --[[1, 0,-1], [1, 0,-1], [1, 0,-1]]],
+                                                                  [[[-0.3088, 0.1070, 0.5371],
+                                                                    [0.8663, 0.5614, -0.7477],
+                                                                    [0.2895, -0.6108, 0.2721]],
+                                                                   [[0.5578, 0.4637, 0.9381],
+                                                                    [0.8224, 0.5894, 0.8726],
+                                                                    [0.8609, 0.7624, 0.4702]],
+                                                                   [[-0.3065, 0.0006, 0.1666],
+                                                                    [0.9588, 0.7830, -0.0195],
+                                                                    [0.4647, -0.0540, -0.0708]],
+                                                                   [[0.4342, 0.2727, 0.7719],
+                                                                    [-0.4279, 0.8931, 0.9385],
+                                                                    [0.1706, 0.9252, -0.2279]]],
                                                                   [[[0.72852,0.73132,0.87321], 
-                                                                    [0.31680,0.72815,0.17521], 
+                                                                    [-0.31680,-0.72815,-0.17521], 
                                                                     [0.08309,0.78823,0.32644]],
-                                                                   [[0.08056,0.97203,0.49361], 
-                                                                    [0.48249,0.07023,0.31486], 
-                                                                    [0.26636,0.48469,0.13499]],
-                                                                   [[0.18446,0.43783,0.32790], 
-                                                                    [0.98957,0.75603,0.78740], 
+                                                                   [[-0.08056,0.97203,0.49361], 
+                                                                    [0.48249,-0.07023,0.31486], 
+                                                                    [0.26636,0.48469,-0.13499]],
+                                                                   [[0.18446,0.43783,-0.32790], 
+                                                                    [-0.98957,0.75603,0.78740], 
                                                                     [0.67707,0.31774,0.68794]],
-                                                                   [[0.24193,0.75307,0.05794], 
+                                                                   [[0.24193,0.75307,-0.05794], 
                                                                     [0.03995,0.27778,0.11217], 
-                                                                    [0.14869,0.48412,0.21583]]]]
+                                                                    [0.14869,-0.48412,0.21583]]]]
                                                                    [[0.0]]
-                                                                   (Fx $ PoolingLayer 1 3 
-                                                                          (Fx $ ConvolutionalLayer [ [[[0.65463,0.83460,0.07642], 
-                                                                                                       [0.99277,0.47830,0.89963], 
-                                                                                                       [0.96863,0.91954,0.19116]],
-                                                                                                      [[0.45800,0.78662,0.19508], 
-                                                                                                       [0.23910,0.78436,0.52115], 
-                                                                                                       [0.02172,0.75704,0.72951]]],
+                                                                   (Fx $ ConvolutionalLayer
+                                                                            [[[[0.1106, 0.0469, 0.4866],
+                                                                             [0.4092, 0.8660, 0.4589],
+                                                                             [0.2732, 0.2664, 0.3007]],
+                                                                            [[0.8315, 0.6070, 0.6062],
+                                                                             [0.5185, 0.0407, 0.4102],
+                                                                             [0.3441, 0.5340, 0.7937]],
+                                                                            [[0.7789, 0.7873, 0.9399],
+                                                                             [0.6884, 0.7718, 0.7626],
+                                                                             [0.9561, 0.2511, 0.4598]],
+                                                                            [[0.6824, 0.9625, 0.7708],
+                                                                             [0.6904, 0.3376, 0.8210],
+                                                                             [0.1522, 0.6939, 0.0375]]]]
+                                                                             [[0.0],[0.0],[0.0],[0.0]]
+                                                                          (Fx $ ConvolutionalLayer [ [[[-0.65463,0.83460,0.07642], 
+                                                                                                       [0.99277,-0.47830,0.89963], 
+                                                                                                       [0.96863,0.91954,-0.19116]],
+                                                                                                      [[0.45800,0.78662,-0.19508], 
+                                                                                                       [-0.23910,0.78436,0.52115], 
+                                                                                                       [0.02172,-0.75704,0.72951]]],
                                                                                                      [[[0.35677,0.17994,0.19801], 
-                                                                                                       [0.34039,0.52200,0.40519],
-                                                                                                       [0.97938,0.09520,0.66647]]],
+                                                                                                       [0.34039,-0.52200,0.40519],
+                                                                                                       [0.97938,0.09520,-0.66647]]],
                                                                                                      [[[0.97999,0.87313,0.48496], 
-                                                                                                       [0.01726,0.02107,0.43254],
+                                                                                                       [-0.01726,-0.02107,-0.43254],
                                                                                                        [0.45462,0.31540,0.15668]]] ]
                                                                                                     [[0.0],[0.0],[0.0],[0.0]]
                                                                                                     (Fx $ InputLayer)))))
@@ -346,7 +371,13 @@ flattenImage image = [ [[(i)]] | (i) <- (concat $ concat $ image) ]
 
 compDeltaFullyConnected :: Image -> [[[Double]]] -> (Int, Int, Int) -> Deltas
 compDeltaFullyConnected actualOutput desiredOutput (m, n, v) = 
-    unflatten  (zipWith (\actOutput desOutput -> 0.5 * ((actOutput) - desOutput)) (concat $ concat actualOutput) (concat $ concat desiredOutput)) (m, n, v)
+    let --(prob, idx) = maximumBy (comparing fst) (zip (concat $ concat actualOutput) [0..]) 
+        (prob, idx) = maximumBy (comparing fst) (zip (concat $ concat desiredOutput) [0..]) 
+        prob2 = (concat $ concat actualOutput) !! idx
+        error = sum (zipWith (\actOutput desOutput -> 0.5 * (sqr (prob2 - 1))) (concat $ concat actualOutput) (concat $ concat desiredOutput))
+    in  trace ((\z -> showFullPrecision  $ read $ formatFloatN (z/100) 18) error) 
+                --(show actualOutput ++ ", " ++ show desiredOutput) 
+                $ unflatten  (zipWith (\actOutput desOutput -> 0.5 * ((actOutput) - desOutput)) (concat $ concat actualOutput) (concat $ concat desiredOutput)) (m, n, v)
     where   unflatten :: [Double] -> (Int, Int, Int) -> Deltas
             unflatten flattened_deltas (m, n, v) 
                                 = map (chunksOf m) (chunksOf (m * n) flattened_deltas)
