@@ -101,7 +101,7 @@ compDelta ::  Activation' -> PropData -> Deltas
 compDelta derivActivation (PropData fp (outputs:inputs:xs) desiredOutput outerDeltas outerWeights)   
     =   let sigmoid'_z = (map derivActivation) (map inverseSigmoid inputs) 
         in  case outerDeltas of [] -> let cost = elemul (zipWith (-) outputs desiredOutput) sigmoid'_z -- we're dealing with the last layer
-                                      in  trace ((\z -> showFullPrecision $ abs $ read $ formatFloatN (z/100) 8) $ head (zipWith (-) outputs desiredOutput)) cost
+                                      in  trace (((\z -> showFullPrecision $ abs $ read $ formatFloatN (z/100) 8) $ head (zipWith (-) outputs desiredOutput))) cost
                                 _  -> elemul (mvmul (transpose outerWeights) outerDeltas) sigmoid'_z -- we're dealing with any other layer than the last
 
 trydelta = compDelta sigmoid' (PropData id [[0.975377100, 0.895021978, 0.956074004], [0.668187772, 0.937026644, 0.2689414214]] [0.0, 1.0, 0.0] [] [[4.0,0.5,2.0],[1.0,1.0,2.0],[3.0,0.0,4.0]] )
@@ -128,9 +128,6 @@ backward weights biases PropData {_inputStack = (inputs:prev_inputs:xs), _outerD
 --  --- | |                    Running And Constructing NNs                | | ---
 --   --- ‾------------------------------------------------------------------‾---
 
--- train :: Fix Layer -> Inputs -> DesiredOutput -> Fix Layer 
--- train neuralnet sample desiredoutput 
---     =  meta alg (\(nn, diff_fun) -> (nn, BackPropData (diff_fun [sample]) desiredoutput [] [[]] )) coalg $ neuralnet
 train :: Fix Layer -> Inputs -> DesiredOutput -> Fix Layer
 train neural_net sample desired_output
     = meta alg h coalg $ neural_net
@@ -161,11 +158,6 @@ deforestAna (Fx  (Layer weights biases activate activate' innerLayer))
 deforestAna (Fx (inputLayer))
         = inputLayer
 
-construct :: [(Weights, Biases, Activation, Activation')] -> Fix Layer
-construct (x:xs) = Fx (Layer weights biases activation activation' (construct (xs)))
-            where (weights, biases, activation, activation') = x
-construct []       = Fx InputLayer
-
 -- cataforward neuralnet sample desiredoutput = (snd (cata alg neuralnet)) sample
 
 neuralnet :: IO (Fix Layer)
@@ -185,38 +177,3 @@ runFCNetwork samples desiredoutputs = do
     network <- neuralnet 
     let trained_network = trains network samples desiredoutputs 
     return trained_network
-                            
--- 0.668187772
--- 0.937026644
--- 0.2689414214
-
--- 0.975377100
--- 0.895021978
--- 0.956074004
-
--- a^L - y
--- 0.9753771
--- -0.104978022
--- 0.956074004
-
--- z 
--- 0.69999999924
--- 2.70000000097
--- -0.99999999984
-
--- sigmoid'(z)
--- 0.24431158873
--- 0.18050777912
--- 0.23857267148
-
--- delta
--- 0.23829592891186
--- -0.0189493496076305
--- 0.0641620733750264
-
-forward' :: Inputs -> Weights -> Biases -> (Double -> Double) -> Inputs
-forward' inputs weights biases activate = map activate ((zipWith (+) (map ((sum)  . (zipWith (*) (inputs))) weights) biases))
-
-runOneLayer = forward' [-0.5, 0.2, 0.5] [[3.0,6.0,2.0],[2.0,1.0,7.0],[6.0,5.0,2.0]] [0,0,0] sigmoid 
-
-runTwoLayer = forward' [0.668187772, 0.937026644, 0.2689414214] [[4.0,0.5,2.0],[1.0,1.0,2.0],[3.0,0.0,4.0]] [0,0,0] sigmoid 

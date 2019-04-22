@@ -67,9 +67,6 @@ data BackProp   = BackProp {
                     } deriving Show
 makeLenses ''BackProp
 
-
-
-
 data Deltas  = Deltas {
                         deltaW           :: [[Double]],
                         deltaU           :: [[Double]],
@@ -115,7 +112,6 @@ instance Show k => Show (Cell k) where
         ++ show inner_cell 
     show InputCell = "InputCell \n"
 
-
 instance Show k => Show (Layer k) where
     show (Layer hparam cell inner_layer) = 
         "Layer\n" ++ "Hyperparameters: " ++ show hparam ++ "\n" ++ "Cells: \n" ++ show cell ++
@@ -144,8 +140,7 @@ algLayer (Layer params cells (innerLayer, nextForwardProp))
                         layerFP            = fpFunc [initialForwardProp]
                         showinputs =  map (\l -> l ^. input) layerFP
                         showoutputs =  map (\l -> l ^. output) layerFP
-                    in  --trace (show showinputs ++ "\n" ++ show showoutputs) 
-                        (layerFP:fps)) . nextForwardProp
+                    in  (layerFP:fps)) . nextForwardProp
       in (Fx (Layer params cells innerLayer), forwardProp) 
 
 coalgLayer :: (Fix Layer, [[ForwardProp]], BackProp) -> Layer (Fix Layer, [[ForwardProp]], BackProp)
@@ -158,7 +153,7 @@ coalgLayer (Fx (Layer params cells innerLayer), fps, backProp)
             deltaTotal          = deltaFunc (initDelta hDim dDim)
 
             backProp'           = initBackProp hDim dDim (Just $ deltaXs deltaTotal) (deltaGates deltaTotal) 
-            showcost            = trace ((\z -> showFullPrecision $ read $ formatFloatN (z/100) 8) $ sum $ map abs $ concat $ deltaW deltaTotal) 
+            showcost            = trace ((\z -> showFullPrecision $ read $ formatFloatN z 8) $ sum $ map sqr $ concat $ deltaW deltaTotal) 
 
         in  case innerLayer of (Fx (InputLayer)) ->   updateParameters (Layer params cell (innerLayer, tail fps, backProp')) deltaTotal
                                _             -> showcost (updateParameters (Layer params cell (innerLayer, tail fps, backProp')) deltaTotal)
@@ -176,9 +171,6 @@ algCell cell
                     output' = elemul (gates ! 4) (map tanh state')
                 in  ((ForwardProp gates x label output' state'  (fp^.params) (tail (fp^.inputStack))):fps)) . forwardProps
       in  (Fx (cell & innerCell .~ nextCell), forwardProps')
-
-
--- Do i need to add deltaX and deltaOut to produce the real deltaOut at every cell??
 
 coalgCell :: (Fix Cell, [ForwardProp], BackProp) -> Cell (Fix Cell, [ForwardProp], BackProp) 
 coalgCell (Fx InputCell, forwardProps, backProp)
@@ -286,39 +278,45 @@ initDelta :: Int -> Int -> Deltas
 initDelta h d = Deltas (fillMatrix (4 * h) (d) 0.0) (fillMatrix (4 * h) (h) 0.0) (replicate  (4 * h) 0.0) [[]] [[]]
 
 
-deep_lstm =   Fx (Layer (V.fromList [[[0.7]],  [[0.95]],  [[0.45]],   [[0.6]]],
-                       V.fromList [[[0.2]]      ,  [[0.8]]      ,   [[0.15]]   ,    [[0.25]]],
-                       V.fromList [[0.0]       , [0.0]        , [0.0]        ,    [0.0]])
-                       (Fx (EndCell [0] NoDeltas
+deep_lstm = do 
+    weights_w_a <- randMat3D 2 1 4 
+    weights_u_a <- randMat3D 1 1 4
+    weights_w_b <- randMat3D 1 1 4
+    weights_u_b <- randMat3D 1 1 4
+    let biases_a = replicate 4 [0.0]
+        biases_b = replicate 4 [0.0] 
+    return $ Fx (Layer (V.fromList weights_w_b, V.fromList weights_u_b, V.fromList biases_b)
+                    (Fx (EndCell [0] NoDeltas
+                        (Fx (Cell [0] NoDeltas 
                             (Fx (Cell [0] NoDeltas 
-                                (Fx (Cell [0] NoDeltas 
+                                (Fx (Cell [0] NoDeltas
                                     (Fx (Cell [0] NoDeltas
-                                        (Fx (Cell [0] NoDeltas
-                                            (Fx InputCell)))))))))))
-            (Fx (Layer (V.fromList [[[0.45]],  [[0.8]],  [[0.25]],   [[0.4]]],
-                     V.fromList [[[0.6]]      ,  [[0.3]]      ,   [[0.3]]     ,    [[0.7]]],
-                     V.fromList [[0.0]       , [0.0]         , [0.0]        ,    [0.0]])
-                     (Fx (EndCell [0.0] NoDeltas
+                                        (Fx InputCell)))))))))))
+                (Fx (Layer (V.fromList weights_w_a, V.fromList weights_u_a, V.fromList biases_a)
+                    (Fx (EndCell [0.0] NoDeltas
                         (Fx (Cell [0] NoDeltas 
                             (Fx (Cell [0] NoDeltas 
                                 (Fx (Cell [0] NoDeltas  
                                     (Fx (Cell [0] NoDeltas 
                                         (Fx InputCell))))))))))) (Fx InputLayer))))
-lstm =   
-            (Fx (Layer (V.fromList [[[0.7]],  [[0.95]],  [[0.45]],   [[0.6]]],
-                     V.fromList [[[0.1]]      ,  [[0.8]]      ,   [[0.15]]     ,    [[0.25]]],
-                     V.fromList [[0.15]       , [0.65]         , [0.2]        ,    [0.1]])
-                    (Fx (EndCell [0.0] NoDeltas 
+lstm =  do
+    weights_w <- randMat3D 2 1 4
+    weights_u <- randMat3D 1 1 4
+    let biases = replicate 4 [0.0] 
+    return  (Fx (Layer (V.fromList weights_w, V.fromList weights_u, V.fromList biases)
+                (Fx (EndCell [0.0] NoDeltas 
                         (Fx (Cell [0] NoDeltas  
                             (Fx (Cell [0] NoDeltas 
                                 (Fx (Cell [0] NoDeltas 
                                     (Fx (Cell [0] NoDeltas 
-                                        (Fx InputCell))))))))))) (Fx InputLayer)))
+                                        (Fx InputCell))))))))))) 
+                (Fx InputLayer)))
 
                
 runRecurrent :: [[([Double], [Double])]] -> IO ()
 runRecurrent samples = do 
-    print $ show $ trains deep_lstm samples
+    network <- deep_lstm
+    print $ show $ trains network samples
 
 runCell :: Layer k -> Layer k 
 runCell InputLayer = InputLayer

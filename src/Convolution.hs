@@ -182,11 +182,7 @@ runConvolutional inputs desiredoutputs = do
     nn <- neuralnet 
     return $ trains nn inputs desiredoutputs
 
----- |‾| -------------------------------------------------------------- |‾| ----
- --- | |                    Forward & Back Propagation                  | | ---
-  --- ‾------------------------------------------------------------------‾---
 
--- verified 
 convoluteDims :: SpatialExtent -> [[[a]]] -> Int -> (Int, Int)
 convoluteDims spatialExtent image stride =
     let (m0, n0, i0, j0)     = (spatialExtent, spatialExtent, 
@@ -198,8 +194,6 @@ convoluteDims2D spatialExtent image stride =
     let (m0, n0, i0, j0)     = (spatialExtent, spatialExtent, 
                                 length image,  length $ head image )
     in  (quot (i0 - m0) stride + 1 , quot (j0 - n0) stride + 1 )  
-
-
 
 convFlatten :: [[Double]] -> SpatialExtent -> Stride -> [[Double]]
 convFlatten image spatialExtent stride =
