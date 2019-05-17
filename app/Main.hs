@@ -16,6 +16,8 @@
 
 module Main where
 
+import System.Directory
+import System.IO
 import System.Environment
 import Numeric 
 import Utils
@@ -37,6 +39,10 @@ import TestSuite
 
 main = do 
      args <- getArgs
+
+     let fileName = "recursenn_output.txt"
+     writeFile fileName ""
+
      case (args !! 0) of "fullyconnected" -> readDataFC
                          "convolutional"  -> readDataConv
                          "recurrent"      -> readDataRecurrent

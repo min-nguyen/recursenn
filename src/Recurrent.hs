@@ -153,10 +153,11 @@ coalgLayer (Fx (Layer params cells innerLayer), fps, backProp)
             deltaTotal          = deltaFunc (initDelta hDim dDim)
 
             backProp'           = initBackProp hDim dDim (Just $ deltaXs deltaTotal) (deltaGates deltaTotal) 
-            showcost            = trace ((\z -> showFullPrecision $ read $ formatFloatN z 8) $ sum $ map sqr $ concat $ deltaW deltaTotal) 
-
+            showCost            = trace ((\z -> showFullPrecision $ read $ formatFloatN z 8) $ sum $ map sqr $ concat $ deltaW deltaTotal) 
+            writeCost           = writeResult ((\z -> showFullPrecision $ read $ formatFloatN (z * 10000) 8) $ sum $ map (abs) $ concat $ deltaW deltaTotal) :: a -> a
+ 
         in  case innerLayer of (Fx (InputLayer)) ->   updateParameters (Layer params cell (innerLayer, tail fps, backProp')) deltaTotal
-                               _             -> showcost (updateParameters (Layer params cell (innerLayer, tail fps, backProp')) deltaTotal)
+                               _             -> writeCost (updateParameters (Layer params cell (innerLayer, tail fps, backProp')) deltaTotal)
 
 algCell ::  Cell (Fix Cell, [ForwardProp] -> [ForwardProp]) -> (Fix Cell, [ForwardProp] -> [ForwardProp]) -- use forwardprop storing inputs, instead of Inputs?
 algCell InputCell = 
@@ -236,7 +237,7 @@ algCell2 cell
 
 compGates :: HyperParameters -> [Double] -> [Double] -> Gates
 compGates (weightsW, weightsU, biases) x h 
-    =   let p = (V.fromList [map sigmoid, map sigmoid, map tanh, map sigmoid])  :: V.Vec4 ([Double] -> [Double])
+    =   let p =(V.fromList [map sigmoid, map sigmoid, map tanh, map sigmoid])  :: V.Vec4 ([Double] -> [Double])
         in  V.zipWith ($) (p) (eleadd3v (V.map (mvmulk x) weightsW) (V.map (mvmulk h) weightsU) biases)
 
 compDGates :: Gates -> [Double] -> [Double] -> [Double] -> [Double] -> [Double]

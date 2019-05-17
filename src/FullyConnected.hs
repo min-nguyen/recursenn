@@ -101,7 +101,7 @@ compDelta ::  Activation' -> PropData -> Deltas
 compDelta derivActivation (PropData fp (outputs:inputs:xs) desiredOutput outerDeltas outerWeights)   
     =   let sigmoid'_z = (map derivActivation) (map inverseSigmoid inputs) 
         in  case outerDeltas of [] -> let cost = elemul (zipWith (-) outputs desiredOutput) sigmoid'_z -- we're dealing with the last layer
-                                      in  trace (((\z -> showFullPrecision $ abs $ read $ formatFloatN (z) 8) $ head (zipWith (-) outputs desiredOutput))) cost
+                                      in  writeResult (((\z -> showFullPrecision $ abs $ read $ formatFloatN (z) 8) $ head (zipWith (-) outputs desiredOutput))) cost
                                 _  -> elemul (mvmul (transpose outerWeights) outerDeltas) sigmoid'_z -- we're dealing with any other layer than the last
 
 trydelta = compDelta sigmoid' (PropData id [[0.975377100, 0.895021978, 0.956074004], [0.668187772, 0.937026644, 0.2689414214]] [0.0, 1.0, 0.0] [] [[4.0,0.5,2.0],[1.0,1.0,2.0],[3.0,0.0,4.0]] )

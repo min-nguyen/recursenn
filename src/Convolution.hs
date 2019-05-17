@@ -117,8 +117,7 @@ coalg (Fx (FullyConnectedLayer innerLayer), BackProp fps outerDeltas outerFilter
 
                 deltas       = compDeltaFullyConnected outputImage desiredOutput (m, n, v)
                 
-            in  --trace ((\z -> showFullPrecision  $ abs $ read $ formatFloatN (z/100) 8) $ head $ head $ head deltas) $
-                            FullyConnectedLayer (innerLayer, BackProp (tail fps) deltas outerFilters desiredOutput)
+            in  FullyConnectedLayer (innerLayer, BackProp (tail fps) deltas outerFilters desiredOutput)
 
 coalg (Fx (ConvolutionalLayer filters biases innerLayer), BackProp fps outerDeltas outerFilters desiredOutput)
         =   let (output:input:_) = fps
@@ -278,10 +277,10 @@ compDeltaFullyConnected actualOutput desiredOutput (m, n, v) =
         (prob, idx) = maximumBy (comparing fst) (zip (concat $ concat desiredOutput) [0..]) 
         prob2 = (concat $ concat actualOutput) !! idx
         error = sum (zipWith (\actOutput desOutput -> 0.5 * (sqr (1 - prob2))) (concat $ concat actualOutput) (concat $ concat desiredOutput))
-    in  trace ("desired: " ++ show desiredOutput ++ " actual: " ++ show actualOutput)
-        --trace ((\z -> showFullPrecision  $ read $ formatFloatN (z/100) 18) error) 
-                --(show actualOutput ++ ", " ++ show desiredOutput) 
-         $ unflatten  (zipWith (\actOutput desOutput -> 0.5 * ((desOutput ) - actOutput)) (concat $ concat actualOutput) (concat $ concat desiredOutput)) (m, n, v)
+    in  writeResult --("desired: " ++ show desiredOutput ++ " actual: " ++ show actualOutput)
+         ((\z -> showFullPrecision  $ read $ formatFloatN (z/100) 18) error) 
+                --(show actualOutput ++ ", " ++ show desiredOutput) $
+         unflatten  (zipWith (\actOutput desOutput -> 0.5 * ((desOutput ) - actOutput)) (concat $ concat actualOutput) (concat $ concat desiredOutput)) (m, n, v)
     where   unflatten :: [Double] -> (Int, Int, Int) -> Deltas
             unflatten flattened_deltas (m, n, v) 
                                 = map (chunksOf m) (chunksOf (m * n) flattened_deltas)

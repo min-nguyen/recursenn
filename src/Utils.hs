@@ -17,10 +17,12 @@
 module Utils where
 import Prelude
 import Numeric 
+import System.IO.Unsafe
 import Control.Lens hiding (snoc,cons)
 import Text.Show.Functions
 import Control.Monad    hiding (mapM, sequence)
 import Debug.Trace
+import System.Environment
 import Data.Maybe
 import Data.These
 import Numeric
@@ -284,4 +286,7 @@ randMat4D m n p q = do
     xs <- sequence $ replicate q $ randMat3D m n p
     return xs
     
-    
+writeResult :: String -> a -> a
+writeResult x a = unsafePerformIO $ do 
+    appendFile "recursenn_output.txt" (x ++ "\n")
+    return a 

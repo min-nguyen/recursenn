@@ -31,6 +31,7 @@ dependencies:
 - align
 - these
 - monad-control
+- directory
 - singletons
 - split
 - lens
