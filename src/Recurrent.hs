@@ -49,7 +49,7 @@ type HyperParameters = (Weights, Weights, Biases)
 data ForwardProp = ForwardProp {
                         _gates       :: Gates,
                         _input       :: [Double],
-                        _des_out     :: Label,
+                        _des_out     :: [Double],
                         _output      :: [Double],
                         _state       :: [Double], -- change this to just state
                         _params      :: HyperParameters,

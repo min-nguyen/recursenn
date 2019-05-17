@@ -136,7 +136,7 @@ coalg (Fx (ConvolutionalLayer filters biases innerLayer), BackProp fps outerDelt
                 newFilters      = [ zipWith elesubm filter (map3 (learningRate *) delta_w) 
                                             | (filter, delta_w) <- (zip filters deltaW) ] 
 
-            in  ConvolutionalLayer newFilters biases (innerLayer, BackProp (tail fps) deltaX newFilters desiredOutput)
+            in  ConvolutionalLayer newFilters biases (innerLayer, BackProp (tail fps) deltaX filters desiredOutput)
      
 coalg (Fx (PoolingLayer stride spatialExtent innerLayer), BackProp fps outerDeltas outerFilters desiredOutput)
         =   let (output:input:_) = fps
@@ -278,9 +278,10 @@ compDeltaFullyConnected actualOutput desiredOutput (m, n, v) =
         (prob, idx) = maximumBy (comparing fst) (zip (concat $ concat desiredOutput) [0..]) 
         prob2 = (concat $ concat actualOutput) !! idx
         error = sum (zipWith (\actOutput desOutput -> 0.5 * (sqr (1 - prob2))) (concat $ concat actualOutput) (concat $ concat desiredOutput))
-    in  trace ((\z -> showFullPrecision  $ read $ formatFloatN (z/100) 18) error) 
+    in  trace ("desired: " ++ show desiredOutput ++ " actual: " ++ show actualOutput)
+        --trace ((\z -> showFullPrecision  $ read $ formatFloatN (z/100) 18) error) 
                 --(show actualOutput ++ ", " ++ show desiredOutput) 
-                $ unflatten  (zipWith (\actOutput desOutput -> 0.5 * ((actOutput) - desOutput)) (concat $ concat actualOutput) (concat $ concat desiredOutput)) (m, n, v)
+         $ unflatten  (zipWith (\actOutput desOutput -> 0.5 * ((desOutput ) - actOutput)) (concat $ concat actualOutput) (concat $ concat desiredOutput)) (m, n, v)
     where   unflatten :: [Double] -> (Int, Int, Int) -> Deltas
             unflatten flattened_deltas (m, n, v) 
                                 = map (chunksOf m) (chunksOf (m * n) flattened_deltas)
